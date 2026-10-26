@@ -45,6 +45,7 @@ export interface RankTrackingRow {
   cpc: number | null;
   desktop: RankTrackingDeviceResult;
   mobile: RankTrackingDeviceResult;
+  provider?: RankTrackingDeviceResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,7 @@ export const createConfigSchema = z.object({
   languageCode: languageCodeField.optional(),
   locationName: z.string().min(1).max(200).optional(),
   devices: devicesEnum.optional(),
+  searchProvider: z.enum(["anyapi", "dataforseo"]).optional(),
   serpDepth: z.number().int().min(10).max(100).multipleOf(10),
   scheduleInterval: scheduleEnum.optional(),
   scheduleTime: scheduleTimeSchema.optional(),
@@ -87,6 +89,7 @@ export const updateConfigSchema = z.object({
   languageCode: languageCodeField.optional(),
   locationName: z.string().min(1).max(200).nullable().optional(),
   devices: devicesEnum.optional(),
+  searchProvider: z.enum(["anyapi", "dataforseo"]).optional(),
   serpDepth: z.number().int().min(10).max(100).multipleOf(10).optional(),
   scheduleInterval: scheduleEnum.optional(),
   scheduleTime: scheduleTimeSchema.optional(),
@@ -143,7 +146,7 @@ export const refreshMetricsSchema = z.object({
   configId: z.string().uuid(),
 });
 
-const deviceEnum = z.enum(["desktop", "mobile"]);
+const deviceEnum = z.enum(["desktop", "mobile", "provider"]);
 const sinceDaysField = z.number().int().positive().max(730).default(365);
 
 export const getKeywordHistorySchema = z.object({

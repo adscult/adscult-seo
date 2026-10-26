@@ -228,10 +228,13 @@ export const rankTrackingConfigs = pgTable(
     locationCode: integer("location_code").notNull().default(2840),
     languageCode: text("language_code").notNull().default("en"),
     devices: text("devices", {
-      enum: ["both", "desktop", "mobile"],
+      enum: ["both", "desktop", "mobile", "provider"],
     })
       .notNull()
       .default("both"),
+    searchProvider: text("search_provider", { enum: ["dataforseo", "anyapi"] })
+      .notNull()
+      .default("dataforseo"),
     serpDepth: integer("serp_depth").notNull(),
     scheduleInterval: text("schedule_interval", {
       enum: ["daily", "weekly", "monthly", "manual"],
@@ -347,7 +350,9 @@ export const rankSnapshots = pgTable(
     // see past position data for deleted keywords.
     trackingKeywordId: text("tracking_keyword_id").notNull(),
     keyword: text("keyword").notNull(),
-    device: text("device", { enum: ["desktop", "mobile"] }).notNull(),
+    device: text("device", {
+      enum: ["desktop", "mobile", "provider"],
+    }).notNull(),
     position: integer("position"), // null = not found in top 20
     url: text("url"),
     serpFeatures: text("serp_features"), // JSON array of feature type strings

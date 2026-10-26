@@ -414,6 +414,13 @@
       "when": 1792447544287,
       "tag": "0058_magical_franklin_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "6",
+      "when": 1792512663544,
+      "tag": "0059_harsh_forge",
+      "breakpoints": true
     }
   ]
 }

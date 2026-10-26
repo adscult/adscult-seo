@@ -51,7 +51,7 @@ export function RankTrackingOverview({
   projectId,
   configId,
 }: {
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
   projectId: string;
   configId: string;
 }) {

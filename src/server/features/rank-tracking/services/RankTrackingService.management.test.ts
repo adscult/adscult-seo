@@ -1,3 +1,4 @@
+import { withProviderExecution } from "@/server/providers/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RankTrackingService } from "./RankTrackingService";
 
@@ -349,5 +350,19 @@ describe("RankTrackingService management invariants", () => {
       RankTrackingService.removeKeywords("foreign", "project_1", ["kw_1"]),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(mocks.removeKeywordsFromConfig).not.toHaveBeenCalled();
+  });
+  it("quotes Treg scheduled ranks at live prices rather than its unavailable queue", async () => {
+    const result = await withProviderExecution(
+      {
+        organizationId: "org_1",
+        provider: "treg",
+        revision: 2,
+        credentialVersion: "saved",
+        source: "database",
+        authorization: "secret",
+      },
+      () => RankTrackingService.estimateCost("config_1", "project_1"),
+    );
+    expect(result.scheduledEstimate).toMatchObject({ costCredits: 12 });
   });
 });

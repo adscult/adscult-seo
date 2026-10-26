@@ -3,6 +3,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { getAuthMode } from "@/lib/auth-mode";
 import { WorkspaceMergeService } from "@/server/auth/workspace-merge";
 import { requireAuthenticatedContext } from "@/serverFunctions/middleware";
+import { hasOrgPermission } from "@/lib/org-permissions";
+import { requireOrgPermission } from "@/server/auth/org-gate";
 
 // Legacy per-user workspaces only ever existed in cloudflare_access mode, and
 // the merge must not be reachable anywhere else. AUTH_MODE is a runtime var on
@@ -14,8 +16,11 @@ function isCloudflareAccessMode() {
 
 export const getWorkspaceMergeStatus = createServerFn({ method: "POST" })
   .middleware(requireAuthenticatedContext)
-  .handler(async () => {
-    if (!isCloudflareAccessMode()) {
+  .handler(async ({ context }) => {
+    if (
+      !isCloudflareAccessMode() ||
+      !hasOrgPermission(context.role, { project: ["delete"] })
+    ) {
       return { legacyWorkspaceCount: 0 };
     }
 
@@ -24,9 +29,11 @@ export const getWorkspaceMergeStatus = createServerFn({ method: "POST" })
     };
   });
 
-// Any authenticated user may run the merge: everyone behind the same Access
-// policy is equally trusted in this deployment model. The service itself
-// refuses to run outside cloudflare_access mode.
+// Merging moves projects across workspaces, so it requires the same permission
+// as destructive project management. The service also checks the auth mode.
 export const mergeLegacyWorkspaces = createServerFn({ method: "POST" })
   .middleware(requireAuthenticatedContext)
-  .handler(async () => WorkspaceMergeService.mergeLegacyWorkspaces());
+  .handler(async ({ context }) => {
+    requireOrgPermission(context, { project: ["delete"] });
+    return WorkspaceMergeService.mergeLegacyWorkspaces();
+  });

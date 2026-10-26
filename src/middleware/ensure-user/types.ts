@@ -14,8 +14,8 @@ export type EnsuredUserContext = {
   organizationId: string;
   // The caller's role in organizationId, from their member row (comma-joined
   // when multiple; check via hasOrgPermission, never string equality).
-  // Delegated modes (Cloudflare Access / local) have one implicit user per
-  // org and no member rows, so they resolve as "owner".
+  // Cloudflare Access uses stored team roles with operator-configured owners.
+  // Local no-auth has one implicit owner.
   role: string;
   project?: EnsuredProject;
 };

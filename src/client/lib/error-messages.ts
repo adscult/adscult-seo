@@ -41,6 +41,8 @@ const STANDARD_MESSAGES: Record<ErrorCode, string> = {
     "DataForSEO rejected the API key. Check that DATAFORSEO_API_KEY is the base64 of your DataForSEO login:password.",
   SEO_PROVIDER_NOT_CONFIGURED:
     "The active SEO provider is not configured. Ask an administrator to check provider settings.",
+  SEO_PROVIDER_AUTH_FAILED:
+    "The SEO provider rejected the credentials. Check the saved credentials and account permissions in provider settings.",
   SEO_PROVIDER_UNSUPPORTED: "Not supported by the active provider.",
   SEO_PROVIDER_QUOTA_EXCEEDED:
     "The connected SEO provider account has reached its balance or usage limit. Check the provider account.",

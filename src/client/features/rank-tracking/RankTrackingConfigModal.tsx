@@ -1,3 +1,12 @@
+import {
+  RankTrackingSourceField,
+  LANGUAGE_ITEMS,
+  DEVICE_ITEMS,
+  DEPTH_ITEMS,
+} from "./RankTrackingConfigFields";
+import { RankTrackingCostEstimate } from "./RankTrackingCostEstimate";
+import { organizationContextQueryOptions } from "@/client/features/team/organizationQueries";
+import { seoProviderStatusQueryOptions } from "@/client/features/settings/providerQueries";
 import { useId, useState } from "react";
 import { projectsQueryOptions } from "@/client/features/projects/projectQueries";
 import { useQuery } from "@tanstack/react-query";
@@ -16,12 +25,8 @@ import {
 import { Field, FieldLabel } from "@/client/components/ui/field";
 import type { RankTrackingConfig } from "@/types/schemas/rank-tracking";
 import { domainField, normalizeDomain } from "@/types/schemas/domain";
-import { pagesToDepth, estimateRankCheckCredits } from "@/shared/rank-tracking";
 import { getLanguageCode } from "@/client/features/keywords/locations";
-import {
-  SERP_LANGUAGE_OPTIONS,
-  getIsoCountryCode,
-} from "@/shared/keyword-locations";
+import { getIsoCountryCode } from "@/shared/keyword-locations";
 import type { ProjectMarket } from "@/client/features/projects/types";
 import { QueryError } from "@/client/components/QueryState";
 import { Spinner } from "@/client/components/Spinner";
@@ -54,24 +59,6 @@ type ConfigFormValues = Omit<SaveConfigInput, "scheduleTime"> & {
   scheduleTime: LocalScheduleTime;
 };
 
-const LANGUAGE_ITEMS = SERP_LANGUAGE_OPTIONS.map((language) => ({
-  value: language.code,
-  label: language.label,
-}));
-
-const DEVICE_ITEMS: { value: SaveConfigInput["devices"]; label: string }[] = [
-  { value: "both", label: "Desktop + Mobile" },
-  { value: "desktop", label: "Desktop only" },
-  { value: "mobile", label: "Mobile only" },
-];
-
-const DEPTH_ITEMS = Array.from({ length: 10 }, (_, i) => i + 1).map(
-  (pages) => ({
-    value: pagesToDepth(pages),
-    label: `${pages} ${pages === 1 ? "page" : "pages"} (top ${pages * 10} results)`,
-  }),
-);
-
 function validateConfig(values: ConfigFormValues) {
   const fields: Partial<Record<keyof ConfigFormValues, string>> = {};
   if (!values.domain.trim()) {
@@ -79,6 +66,8 @@ function validateConfig(values: ConfigFormValues) {
   } else if (!domainField.safeParse(values.domain).success) {
     fields.domain = "Enter a valid domain, like example.com";
   }
+  if (values.searchProvider === "anyapi" && values.languageCode.length !== 2)
+    fields.languageCode = "Choose a supported AnyAPI language";
   if (values.targetingMode === "local" && !values.locationName) {
     fields.locationName = "Select a city or region for local targeting";
   }
@@ -97,11 +86,15 @@ export function RankTrackingConfigModal({
     ...projectsQueryOptions(),
     enabled: !existingConfig,
   });
+  const organization = useQuery(organizationContextQueryOptions());
+  const providerStatus = useQuery(
+    seoProviderStatusQueryOptions(organization.data?.organizationId),
+  );
   const initialMarket =
     existingConfig ??
     projectsQuery.data?.find((project) => project.id === projectId);
 
-  if (!initialMarket) {
+  if (!initialMarket || !providerStatus.data || providerStatus.isError) {
     return (
       <Dialog
         open
@@ -114,13 +107,16 @@ export function RankTrackingConfigModal({
             <DialogTitle className="sr-only">Add Domain</DialogTitle>
           </DialogHeader>
           <div className="flex min-h-40 items-center justify-center">
-            {projectsQuery.isPending ? (
+            {projectsQuery.isPending || providerStatus.isPending ? (
               <Spinner />
             ) : (
               <QueryError
-                error={projectsQuery.error}
+                error={providerStatus.error ?? projectsQuery.error}
                 fallback="Failed to load the project."
-                onRetry={() => void projectsQuery.refetch()}
+                onRetry={() => {
+                  void projectsQuery.refetch();
+                  void providerStatus.refetch();
+                }}
                 isRetrying={projectsQuery.isFetching}
               />
             )}
@@ -135,6 +131,7 @@ export function RankTrackingConfigModal({
       projectId={projectId}
       existingConfig={existingConfig}
       initialMarket={initialMarket}
+      activeProvider={providerStatus.data.provider}
       onClose={onClose}
       onSaved={onSaved}
       onConfigCreated={onConfigCreated}
@@ -146,10 +143,14 @@ function RankTrackingConfigModalContent({
   projectId,
   existingConfig,
   initialMarket,
+  activeProvider,
   onClose,
   onSaved,
   onConfigCreated,
-}: Props & { initialMarket: ProjectMarket }) {
+}: Props & {
+  initialMarket: ProjectMarket;
+  activeProvider: "treg" | "dataforseo" | null;
+}) {
   const countryId = useId();
   const isEdit = !!existingConfig;
   const scheduledChecksPaused =
@@ -177,7 +178,12 @@ function RankTrackingConfigModalContent({
     languageCode: existingConfig?.languageCode ?? initialMarket.languageCode,
     targetingMode: existingConfig?.locationName ? "local" : "national",
     locationName: existingConfig?.locationName ?? undefined,
-    devices: existingConfig?.devices ?? "mobile",
+    searchProvider:
+      existingConfig?.searchProvider ??
+      (activeProvider === "treg" ? "anyapi" : "dataforseo"),
+    devices:
+      existingConfig?.devices ??
+      (activeProvider === "treg" ? "provider" : "mobile"),
     schedule:
       existingConfig?.scheduleInterval ??
       (scheduledChecksPaused ? "manual" : "weekly"),
@@ -272,6 +278,21 @@ function RankTrackingConfigModalContent({
                 )}
               </form.AppField>
 
+              <RankTrackingSourceField
+                value={values.searchProvider}
+                activeProvider={activeProvider}
+                onChange={(source) => {
+                  form.setFieldValue("searchProvider", source);
+                  form.setFieldValue(
+                    "devices",
+                    source === "anyapi" ? "provider" : "mobile",
+                  );
+                  if (source === "anyapi") {
+                    form.setFieldValue("targetingMode", "national");
+                    form.setFieldValue("locationName", undefined);
+                  }
+                }}
+              />
               <Field>
                 <FieldLabel htmlFor={countryId}>Country</FieldLabel>
                 <CountryCombobox
@@ -289,48 +310,65 @@ function RankTrackingConfigModalContent({
                 />
               </Field>
 
-              <form.Field name="locationName">
-                {(field) => (
-                  <SearchTargetingField
-                    mode={values.targetingMode}
-                    onModeChange={(mode) =>
-                      form.setFieldValue("targetingMode", mode)
-                    }
-                    locationName={field.state.value}
-                    onLocationNameChange={field.handleChange}
-                    countryCode={getIsoCountryCode(values.locationCode)}
-                    error={getFieldError(field.state.meta.errors) ?? undefined}
-                  />
-                )}
-              </form.Field>
+              {values.searchProvider !== "anyapi" && (
+                <form.Field name="locationName">
+                  {(field) => (
+                    <SearchTargetingField
+                      mode={values.targetingMode}
+                      onModeChange={(mode) =>
+                        form.setFieldValue("targetingMode", mode)
+                      }
+                      locationName={field.state.value}
+                      onLocationNameChange={field.handleChange}
+                      countryCode={getIsoCountryCode(values.locationCode)}
+                      error={
+                        getFieldError(field.state.meta.errors) ?? undefined
+                      }
+                    />
+                  )}
+                </form.Field>
+              )}
 
               <form.AppField name="languageCode">
                 {(field) => (
                   <field.SelectField
                     label="Language"
-                    items={LANGUAGE_ITEMS}
+                    items={
+                      values.searchProvider === "anyapi"
+                        ? LANGUAGE_ITEMS.filter(
+                            (item) => item.value.length === 2,
+                          )
+                        : LANGUAGE_ITEMS
+                    }
                     description="Defaults to the country's language. Any language can be tracked in any country — pick the one your customers search in."
                   />
                 )}
               </form.AppField>
 
-              <div className="flex flex-col gap-1.5">
-                <form.AppField name="devices">
-                  {(field) => (
-                    <field.SelectField
-                      label="Devices"
-                      items={DEVICE_ITEMS}
-                      description="Most Google searches come from mobile, but select this based on your customer."
-                    />
+              {values.searchProvider === "anyapi" ? (
+                <p className="text-sm text-muted-foreground">
+                  Device: provider-managed. Results are stored separately from
+                  desktop and mobile history. Checks can take several minutes.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <form.AppField name="devices">
+                    {(field) => (
+                      <field.SelectField
+                        label="Devices"
+                        items={DEVICE_ITEMS}
+                        description="Most Google searches come from mobile, but select this based on your customer."
+                      />
+                    )}
+                  </form.AppField>
+                  {values.devices === "both" && (
+                    <p className="flex items-start gap-1.5 text-xs text-info">
+                      <Info className="mt-0.5 size-3.5 shrink-0" />
+                      Tracking both devices uses 2x credits per keyword check
+                    </p>
                   )}
-                </form.AppField>
-                {values.devices === "both" && (
-                  <p className="flex items-start gap-1.5 text-xs text-info">
-                    <Info className="mt-0.5 size-3.5 shrink-0" />
-                    Tracking both devices uses 2x credits per keyword check
-                  </p>
-                )}
-              </div>
+                </div>
+              )}
 
               <ScheduleField
                 schedule={values.schedule}
@@ -350,12 +388,18 @@ function RankTrackingConfigModalContent({
                   <field.SelectField
                     label="Search Depth"
                     items={DEPTH_ITEMS}
-                    description="10 pages is ~8x more expensive than 1 page"
+                    description={
+                      values.searchProvider === "anyapi"
+                        ? "AnyAPI reads pages until this depth or your domain is found. Each page is billed separately."
+                        : "10 pages is ~8x more expensive than 1 page"
+                    }
                   />
                 )}
               </form.AppField>
 
-              <CostEstimate
+              <RankTrackingCostEstimate
+                useLivePricing={activeProvider === "treg"}
+                searchProvider={values.searchProvider}
                 devices={values.devices}
                 serpDepth={values.serpDepth}
                 schedule={values.schedule}
@@ -379,41 +423,5 @@ function RankTrackingConfigModalContent({
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function CostEstimate({
-  devices,
-  serpDepth,
-  schedule,
-}: Pick<ConfigFormValues, "devices" | "serpDepth" | "schedule">) {
-  // Scheduled checks run through the cheaper task queue; manual configs only
-  // ever pay the live price.
-  const { costUsd: costPerKeyword } = estimateRankCheckCredits(
-    ["plain keyword"],
-    devices,
-    serpDepth,
-    schedule === "manual" ? "live" : "queued",
-  );
-  const checksPerMonth =
-    schedule === "daily" ? 30 : schedule === "weekly" ? 4 : 1;
-  return (
-    <div className="space-y-0.5 rounded-lg bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-      <div>
-        <span className="font-mono font-semibold text-foreground">
-          ~${costPerKeyword.toFixed(4)}
-        </span>{" "}
-        per keyword per check
-      </div>
-      {schedule !== "manual" && (
-        <div>
-          50 keywords would cost{" "}
-          <span className="font-mono font-semibold text-foreground">
-            ~${(costPerKeyword * 50 * checksPerMonth).toFixed(2)}
-          </span>
-          /month
-        </div>
-      )}
-    </div>
   );
 }

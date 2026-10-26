@@ -1,0 +1,33 @@
+services:
+  open-seo:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "3001"
+    environment:
+      CLOUDFLARE_INCLUDE_PROCESS_ENV: "true"
+      PORT: "3001"
+      AUTH_MODE: cloudflare_access
+      ALLOWED_HOST: seo.adscult.tech
+      TEAM_DOMAIN: ${TEAM_DOMAIN:?Set your Cloudflare Access team URL}
+      POLICY_AUD: ${POLICY_AUD:?Set your Cloudflare Access application audience}
+      SELFHOST_OWNER_EMAILS: ${SELFHOST_OWNER_EMAILS:-arsalan@adscult.com}
+      VITE_SHOW_DEVTOOLS: "false"
+      SEO_PROVIDER: treg
+      TREG_TOKEN: ${TREG_TOKEN:?Set your Treg token}
+      SEO_PROVIDER_SECRET_VERSION: v1
+      SEO_PROVIDER_SECRET_v1: ${SEO_PROVIDER_SECRET_v1:?Set a stable encryption secret of at least 32 characters}
+      DATAFORSEO_API_KEY: ${DATAFORSEO_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      OPENSEO_TELEMETRY_DISABLED: ${OPENSEO_TELEMETRY_DISABLED:-}
+    volumes:
+      - open_seo_data:/app/.wrangler
+
+volumes:
+  open_seo_data:

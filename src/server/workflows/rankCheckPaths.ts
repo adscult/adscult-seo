@@ -12,6 +12,7 @@ import {
   postRankTasks,
   collectRankTask,
 } from "@/server/providers/rank-check";
+import { getScopedProviderExecution } from "@/server/providers/context";
 import { unwrapProviderResult } from "@/server/providers/operation";
 import { AppError, asAppError } from "@/server/lib/errors";
 import type { RankTrackingConfig } from "@/types/schemas/rank-tracking";
@@ -25,7 +26,7 @@ const SINGLE_ATTEMPT_STEP_CONFIG = {
 
 type KeywordEntry = { id: string; keyword: string };
 type RankCheckResultWithDevice = RankCheckResult & {
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
 };
 
 function mapResultsToSnapshotRows(
@@ -48,6 +49,7 @@ interface CheckContext {
   billingCustomer: BillingCustomerContext;
   keywords: KeywordEntry[];
   devices: RankTrackingConfig["devices"];
+  searchProvider?: "anyapi" | "dataforseo";
   serpDepth: number;
   domain: string;
   locationCode: number;
@@ -61,7 +63,7 @@ function expandToTaskInputs(
   keywords: KeywordEntry[],
   devices: RankTrackingConfig["devices"],
 ): RankCheckTaskInput[] {
-  const deviceList: Array<"desktop" | "mobile"> =
+  const deviceList: Array<"desktop" | "mobile" | "provider"> =
     devices === "both" ? ["desktop", "mobile"] : [devices];
   return keywords.flatMap((kw) =>
     deviceList.map((device) => ({
@@ -102,6 +104,7 @@ async function checkBatchLive(
         targetDomain: ctx.domain,
         depth: ctx.serpDepth,
       })),
+      ctx.searchProvider ?? "dataforseo",
     );
     settled = unwrapProviderResult(batch).items.map((item) => {
       try {
@@ -145,6 +148,7 @@ async function checkBatchLive(
   if (results.length > 0) {
     await RankTrackingRepository.insertSnapshots(
       mapResultsToSnapshotRows(ctx.runId, results),
+      ctx.searchProvider ?? "dataforseo",
     );
   }
   return results.length;
@@ -177,7 +181,9 @@ export async function runLiveCheck(
       await pgStep(
         step,
         `live-batch-${batchIndex}`,
-        SINGLE_ATTEMPT_STEP_CONFIG,
+        ctx.searchProvider === "anyapi"
+          ? { ...SINGLE_ATTEMPT_STEP_CONFIG, timeout: "6 minutes" as const }
+          : SINGLE_ATTEMPT_STEP_CONFIG,
         async () => {
           const written = await checkBatchLive(ctx, batchTasks);
           // Progress for the UI; finalize recounts from the DB anyway.
@@ -199,6 +205,7 @@ export async function runLiveCheck(
 
   // Diff against the DB rather than batch return values, so pairs from a
   // batch step that threw are included too.
+  if ((await getScopedProviderExecution())?.provider === "treg") return null;
   const missing = await pgStep(
     step,
     "find-missing",
@@ -492,7 +499,9 @@ export async function runQueuedCheck(
     stats.fallbackChecked += await pgStep(
       step,
       `fallback-batch-${batchIndex}`,
-      SINGLE_ATTEMPT_STEP_CONFIG,
+      ctx.searchProvider === "anyapi"
+        ? { ...SINGLE_ATTEMPT_STEP_CONFIG, timeout: "6 minutes" as const }
+        : SINGLE_ATTEMPT_STEP_CONFIG,
       () => checkBatchLive(ctx, batch),
     );
   }

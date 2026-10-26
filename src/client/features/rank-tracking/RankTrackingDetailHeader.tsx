@@ -46,8 +46,8 @@ export function RankTrackingDetailHeader({
   run: { lastCheckedAt: string | null } | null | undefined;
   costEstimate: { keywordCount: number; costUsd: number } | undefined;
   hasBothDevices: boolean;
-  activeDevice: "desktop" | "mobile";
-  onActiveDeviceChange: (v: "desktop" | "mobile") => void;
+  activeDevice: "desktop" | "mobile" | "provider";
+  onActiveDeviceChange: (v: "desktop" | "mobile" | "provider") => void;
   comparePeriod: ComparePeriod;
   onComparePeriodChange: (v: ComparePeriod) => void;
   onEdit: () => void;
@@ -58,11 +58,17 @@ export function RankTrackingDetailHeader({
       <div>
         <h2 className="text-lg font-semibold">{config.domain}</h2>
         <p className="text-xs text-muted-foreground">
+          Rank source:{" "}
+          {config.searchProvider === "anyapi"
+            ? "Treg → AnyAPI (keyword metrics: DataForSEO)"
+            : "DataForSEO (through the active SEO provider)"}
+        </p>
+        <p className="text-xs text-muted-foreground">
           {config.locationName
             ? formatLocationLabel(config.locationName, 2)
             : (LOCATIONS[config.locationCode] ?? "US")}{" "}
           &middot;{" "}
-          {config.devices === "desktop" ? (
+          {config.devices === "desktop" || config.devices === "provider" ? (
             devicesLabel(config.devices)
           ) : (
             <Tooltip>

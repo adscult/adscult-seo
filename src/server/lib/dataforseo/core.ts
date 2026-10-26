@@ -57,16 +57,18 @@ function createAuthenticatedFetch(
     const scopedExecution = await getScopedProviderExecution();
     // Loading the persistence seam only for scoped app requests preserves the
     // existing environment-only CLI and section-test entry points.
-    const execution = scopedExecution
-      ? await (
-          await import("@/server/providers/task-context")
-        ).resolveTaskExecution(
-          new URL(typeof url === "string" ? url : url.url).pathname,
-          scopedExecution,
-        )
-      : undefined;
-    if (execution?.provider === "treg")
-      throw new AppError("SEO_PROVIDER_UNSUPPORTED");
+    const execution =
+      scopedExecution &&
+      new URL(typeof url === "string" ? url : url.url).pathname.includes(
+        "/task_get/",
+      )
+        ? await (
+            await import("@/server/providers/task-context")
+          ).resolveTaskExecution(
+            new URL(typeof url === "string" ? url : url.url).pathname,
+            scopedExecution,
+          )
+        : scopedExecution;
     const apiKey =
       execution?.authorization ??
       (await getRequiredEnvValue("DATAFORSEO_API_KEY"));
@@ -124,7 +126,11 @@ function createAuthenticatedFetch(
       if (response.ok) return response;
 
       // Transient upstream 5xx on an idempotent read -> back off and retry.
-      if (response.status >= 500 && attempt < maxServerErrorRetries) {
+      if (
+        requestExecution.provider === "dataforseo" &&
+        response.status >= 500 &&
+        attempt < maxServerErrorRetries
+      ) {
         await new Promise((resolve) =>
           setTimeout(resolve, DATAFORSEO_RETRY_BACKOFF_MS * (attempt + 1)),
         );

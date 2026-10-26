@@ -29,6 +29,7 @@ vi.mock("@/db", async () => {
 beforeAll(async () => {
   await runtime.client!.executeMultiple(`
     CREATE TABLE rank_tracking_configs (
+      search_provider TEXT NOT NULL DEFAULT 'dataforseo',
       id TEXT PRIMARY KEY, project_id TEXT, domain TEXT, location_code INTEGER,
       language_code TEXT, devices TEXT, serp_depth INTEGER, schedule_interval TEXT,
       location_name TEXT, is_active INTEGER, last_checked_at TEXT, next_check_at TEXT,

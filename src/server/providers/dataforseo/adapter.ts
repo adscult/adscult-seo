@@ -34,7 +34,7 @@ export const dataforseoAdapter: ProviderTransportAdapter = {
     }
     const headers = new Headers(init.headers);
     headers.set("Authorization", `Basic ${execution.authorization}`);
-    return fetch(url, { ...init, headers, redirect: "error" });
+    return fetch(url, { ...init, headers, redirect: "manual" });
   },
 };
 

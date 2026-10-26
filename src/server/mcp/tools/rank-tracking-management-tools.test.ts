@@ -16,6 +16,16 @@ const mocks = vi.hoisted(() => ({
   waitUntil: vi.fn(),
 }));
 
+vi.mock("@/server/providers/resolver", () => ({
+  resolveProviderExecution: async (organizationId: string) => ({
+    organizationId,
+    provider: "dataforseo",
+    revision: 0,
+    credentialVersion: null,
+    source: "environment",
+    authorization: "secret",
+  }),
+}));
 vi.mock("cloudflare:workers", () => ({
   env: {},
   waitUntil: mocks.waitUntil,

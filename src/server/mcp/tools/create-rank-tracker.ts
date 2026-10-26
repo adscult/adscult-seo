@@ -1,3 +1,4 @@
+import { getScopedProviderExecution } from "@/server/providers/context";
 import { waitUntil } from "cloudflare:workers";
 import { z } from "zod";
 import { RankTrackingService } from "@/server/features/rank-tracking/services/RankTrackingService";
@@ -37,9 +38,17 @@ const inputSchema = {
       'Exact DataForSEO location name for local rank tracking, e.g. "Catonsville,Maryland,United States". Must come from search_serp_locations; free-form names like "Catonsville, MD" are rejected.',
     ),
   devices: z
-    .enum(["desktop", "mobile", "both"])
+    .enum(["desktop", "mobile", "both", "provider"])
     .optional()
-    .describe("Devices to track. Defaults to mobile."),
+    .describe(
+      "Devices to track. AnyAPI requires provider (no device selection); DataForSEO defaults to mobile.",
+    ),
+  searchProvider: z
+    .enum(["anyapi", "dataforseo"])
+    .optional()
+    .describe(
+      "Rank source. Defaults to AnyAPI when Treg is active, otherwise DataForSEO. AnyAPI supports country targeting and provider-managed device only.",
+    ),
   serpDepth: z
     .number()
     .int()
@@ -68,7 +77,7 @@ export const createRankTrackerTool = {
   config: {
     title: "Create rank tracker",
     description:
-      "Create a rank tracking configuration for a project. Creating an empty tracker uses no credits and starts no check, but daily, weekly, and monthly trackers will spend credits after keywords are added. The domain defaults to the project's domain; market defaults to the project's market; devices default to mobile, search depth to 40, and schedule to manual. Use estimate_rank_tracker_cost before adding keywords to a scheduled tracker or starting a live run. Call get_rank_tracker first to avoid duplicates. For local (city-level) tracking, call search_serp_locations first and pass its locationName verbatim.",
+      "Create a rank tracking configuration for a project. Creating an empty tracker uses no credits and starts no check, but daily, weekly, and monthly trackers will spend credits after keywords are added. The domain defaults to the project's domain; market defaults to the project's market; source defaults to AnyAPI through Treg (country-level, provider-managed device), otherwise DataForSEO; search depth defaults to 40, and schedule to manual. Use estimate_rank_tracker_cost before adding keywords to a scheduled tracker or starting a live run. Call get_rank_tracker first to avoid duplicates. For local (city-level) tracking, call search_serp_locations first and pass its locationName verbatim.",
     inputSchema,
     outputSchema: z
       .object({
@@ -92,6 +101,11 @@ export const createRankTrackerTool = {
       );
     }
 
+    const searchProvider =
+      args.searchProvider ??
+      ((await getScopedProviderExecution())?.provider === "treg"
+        ? "anyapi"
+        : "dataforseo");
     const config = await RankTrackingService.createConfig({
       projectId: args.projectId,
       projectMarket: context.project,
@@ -99,7 +113,9 @@ export const createRankTrackerTool = {
       locationCode: args.locationCode,
       languageCode: args.languageCode,
       locationName: args.locationName,
-      devices: args.devices ?? "mobile",
+      devices:
+        args.devices ?? (searchProvider === "anyapi" ? "provider" : "mobile"),
+      searchProvider,
       serpDepth: args.serpDepth ?? 40,
       scheduleInterval: args.scheduleInterval ?? "manual",
       scheduleTime: args.scheduleTime,

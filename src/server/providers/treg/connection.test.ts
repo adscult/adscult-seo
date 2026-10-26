@@ -12,7 +12,8 @@ const execution = {
 const adapter = getProviderAdapter("treg");
 afterEach(() => vi.unstubAllGlobals());
 
-it("authenticates through the fixed free account route without returning account data or enabling SEO", async () => {
+it("authenticates through the fixed free account route without returning account data or changing capabilities", async () => {
+  const capabilities = adapter.capabilities();
   const request = vi.fn<typeof fetch>().mockResolvedValue(
     Response.json({
       org_id: 1,
@@ -35,16 +36,11 @@ it("authenticates through the fixed free account route without returning account
     "https://treg.to/auth/me",
     expect.objectContaining({
       method: "GET",
-      redirect: "error",
+      redirect: "manual",
       headers: { "X-Treg-Token": "test-token" },
     }),
   );
-  expect(
-    adapter.capabilities().every((entry) => entry.state === "unverified"),
-  ).toBe(true);
-  await expect(
-    adapter.request(execution, "https://treg.to/call/anything", {}),
-  ).rejects.toMatchObject({ code: "SEO_PROVIDER_UNSUPPORTED" });
+  expect(adapter.capabilities()).toEqual(capabilities);
   expect(request).toHaveBeenCalledOnce();
 });
 

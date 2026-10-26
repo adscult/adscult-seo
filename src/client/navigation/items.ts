@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   FileText,
   Globe,
+  GitCompareArrows,
   LayoutDashboard,
   Link2,
   MessageSquare,
@@ -48,6 +49,11 @@ const projectNavItems = [
     to: "/p/$projectId/domain" as const,
     label: "Domain Overview",
     icon: Globe,
+  },
+  {
+    to: "/p/$projectId/page-gaps" as const,
+    label: "Page gaps",
+    icon: GitCompareArrows,
   },
   {
     to: "/p/$projectId/backlinks" as const,
@@ -130,6 +136,7 @@ export function getProjectNavGroups(projectId: string) {
         byPath("/p/$projectId/keywords"),
         byPath("/p/$projectId/domain"),
         byPath("/p/$projectId/backlinks"),
+        byPath("/p/$projectId/page-gaps"),
       ],
     },
     {

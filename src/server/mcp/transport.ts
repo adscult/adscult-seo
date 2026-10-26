@@ -250,6 +250,7 @@ export async function handleSelfHostedOpenSeoMcpRequest(
     userId: identity.userId,
     userEmail: identity.userEmail,
     organizationId: identity.organizationId,
+    role: identity.role,
     baseUrl: getPublicOrigin(request),
     userAgent: request.headers.get("user-agent") ?? undefined,
   });

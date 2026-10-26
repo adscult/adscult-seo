@@ -12,7 +12,8 @@ import type {
 
 export type SaveConfigInput = {
   domain: string;
-  devices: "both" | "desktop" | "mobile";
+  devices: "both" | "desktop" | "mobile" | "provider";
+  searchProvider: "anyapi" | "dataforseo";
   serpDepth: number;
   locationCode: number;
   languageCode: string;
@@ -26,6 +27,7 @@ function commonFields(input: SaveConfigInput) {
   return {
     domain: input.domain,
     devices: input.devices,
+    searchProvider: input.searchProvider,
     serpDepth: input.serpDepth,
     locationCode: input.locationCode,
     languageCode: input.languageCode,

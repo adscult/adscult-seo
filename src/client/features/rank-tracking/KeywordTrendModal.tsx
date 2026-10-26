@@ -44,9 +44,10 @@ import {
 } from "./RankTrackingTrendChart";
 
 const DEVICE_STYLE: Record<
-  "desktop" | "mobile",
+  "desktop" | "mobile" | "provider",
   { label: string; color: string }
 > = {
+  provider: { label: "AnyAPI (provider-managed device)", color: "#f59e0b" },
   desktop: { label: "Desktop", color: "#2563eb" },
   mobile: { label: "Mobile", color: "#14b8a6" },
 };
@@ -349,9 +350,11 @@ export function KeywordTrendModal({
 
 function deriveDevices(
   points: RankKeywordHistoryPoint[],
-): Array<"desktop" | "mobile"> {
+): Array<"desktop" | "mobile" | "provider"> {
   const present = new Set(points.map((p) => p.device));
-  return (["desktop", "mobile"] as const).filter((d) => present.has(d));
+  return (["desktop", "mobile", "provider"] as const).filter((d) =>
+    present.has(d),
+  );
 }
 
 interface ChartRow extends Record<string, unknown> {
@@ -380,7 +383,7 @@ function buildChartData(
 }
 
 interface HistoryRow {
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
   checkedAt: string;
   position: number | null;
   previousPosition: number | null;
@@ -391,7 +394,10 @@ interface HistoryRow {
  * same device, so the Δ column can reuse DeviceRankCell's 4-case logic.
  */
 function buildHistoryRows(points: RankKeywordHistoryPoint[]): HistoryRow[] {
-  const prevByDevice = new Map<"desktop" | "mobile", number | null>();
+  const prevByDevice = new Map<
+    "desktop" | "mobile" | "provider",
+    number | null
+  >();
   const rows: HistoryRow[] = [];
   // points are oldest-first; walk forward to capture the prior position.
   for (const p of points) {

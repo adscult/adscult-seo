@@ -43,7 +43,8 @@ interface RankCheckParams {
   locationCode: number;
   languageCode: string;
   locationName?: string;
-  devices: "both" | "desktop" | "mobile";
+  devices: "both" | "desktop" | "mobile" | "provider";
+  searchProvider?: "anyapi" | "dataforseo";
   serpDepth: number;
   trigger: "manual" | "scheduled";
   keywordIds?: string[];
@@ -51,6 +52,7 @@ interface RankCheckParams {
 }
 
 async function prepareRankCheckKeywords(input: {
+  provider: "treg" | "dataforseo";
   runId: string;
   configId: string;
   billingCustomer: BillingCustomerContext;
@@ -90,7 +92,9 @@ async function prepareRankCheckKeywords(input: {
     trackingKeywords.map((kw) => kw.keyword),
     input.devices,
     input.serpDepth,
-    input.trigger === "scheduled" ? "queued" : "live",
+    input.provider !== "treg" && input.trigger === "scheduled"
+      ? "queued"
+      : "live",
   );
   if (input.maxCostCredits != null && costCredits > input.maxCostCredits) {
     throw new AppError(
@@ -167,7 +171,7 @@ async function finalizeRankCheckRun(input: {
   );
   const keywordsChecked = new Set(snapshots.map((s) => s.trackingKeywordId))
     .size;
-  const devices: Array<"desktop" | "mobile"> =
+  const devices: Array<"desktop" | "mobile" | "provider"> =
     input.devices === "both" ? ["desktop", "mobile"] : [input.devices];
   const checkedByDevice = devices.map((device) => ({
     device,
@@ -313,7 +317,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
         throw error;
       }
       return withProviderReference(reference, () =>
-        this.runScoped(event, step),
+        this.runScoped(event, step, reference.provider),
       );
     });
   }
@@ -321,6 +325,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
   private async runScoped(
     event: WorkflowEvent<RankCheckParams>,
     step: WorkflowStep,
+    provider: "treg" | "dataforseo",
   ) {
     const {
       runId,
@@ -332,6 +337,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
       languageCode,
       locationName,
       devices,
+      searchProvider = "dataforseo",
       serpDepth,
       trigger,
       keywordIds,
@@ -367,6 +373,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
         { retries: { limit: 0, delay: "1 second" } },
         async () =>
           prepareRankCheckKeywords({
+            provider,
             runId,
             configId,
             billingCustomer,
@@ -390,6 +397,7 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           billingCustomer,
           keywords,
           devices,
+          searchProvider,
           serpDepth,
           domain,
           locationCode,
@@ -397,11 +405,12 @@ export class RankCheckWorkflow extends WorkflowEntrypoint<
           locationName,
           runId,
         };
-        // Scheduled checks use DataForSEO's task queue (~30% of live cost);
+        // Direct DataForSEO schedules use its task queue. Treg uses live
+        // requests for both sources; its queue routes are unavailable.
         // manual checks stay on the live endpoint for instant results, and
         // only the pairs the live endpoint missed go to the queue.
         queueStats =
-          trigger === "scheduled"
+          provider !== "treg" && trigger === "scheduled"
             ? await runQueuedCheck(step, checkContext)
             : await runLiveCheck(step, checkContext);
       } catch (error) {

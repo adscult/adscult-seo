@@ -55,7 +55,7 @@ import { useDebouncedDraft } from "@/client/hooks/useDebouncedDraft";
 
 function deviceVisibility(
   devices: RankTrackingConfig["devices"],
-  activeDevice: "desktop" | "mobile",
+  activeDevice: "desktop" | "mobile" | "provider",
 ): { showDesktop: boolean; showMobile: boolean } {
   if (devices === "both") {
     return {
@@ -64,8 +64,8 @@ function deviceVisibility(
     };
   }
   return {
-    showDesktop: devices !== "mobile",
-    showMobile: devices !== "desktop",
+    showDesktop: devices === "desktop",
+    showMobile: devices === "mobile",
   };
 }
 
@@ -110,7 +110,11 @@ export function RankTrackingDomainDetail({
     search.compare ?? defaultComparePeriod(config.scheduleInterval);
   // A single-device config has only one device to show.
   const activeDevice =
-    config.devices === "both" ? (search.device ?? "desktop") : config.devices;
+    config.devices === "both"
+      ? search.device === "mobile"
+        ? "mobile"
+        : "desktop"
+      : config.devices;
   const viewMode = search.view ?? "table";
 
   // The route keys this component by config, so previous data here is always
@@ -215,11 +219,17 @@ export function RankTrackingDomainDetail({
     [rows, filters],
   );
   const activeFilterCount = countActiveFilters(filters);
-  const defaultSortId = showDesktop ? "desktopPosition" : "mobilePosition";
+  const defaultSortId =
+    config.devices === "provider"
+      ? "providerPosition"
+      : showDesktop
+        ? "desktopPosition"
+        : "mobilePosition";
   // A position sort for the hidden device falls back to the default.
   const sortId =
     (search.sort === "desktopPosition" && !showDesktop) ||
-    (search.sort === "mobilePosition" && !showMobile)
+    (search.sort === "mobilePosition" && !showMobile) ||
+    (search.sort === "providerPosition" && config.devices !== "provider")
       ? undefined
       : search.sort;
   // Fall back to the table if history disappears (e.g. device switch).

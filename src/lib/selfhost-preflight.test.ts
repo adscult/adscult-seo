@@ -9,6 +9,18 @@ function itemFor(
 }
 
 describe("runSelfhostPreflight", () => {
+  it.each([undefined, "invalid-address", "owner@example.com"])(
+    "requires valid configured owners for Cloudflare Access (%s)",
+    (owners) => {
+      const result = runSelfhostPreflight({
+        AUTH_MODE: "cloudflare_access",
+        TEAM_DOMAIN: "https://team.cloudflareaccess.com",
+        POLICY_AUD: "audience",
+        SELFHOST_OWNER_EMAILS: owners,
+      });
+      expect(result.failed).toBe(owners !== "owner@example.com");
+    },
+  );
   it("passes the stock Docker setup (local_noauth + DataForSEO key)", () => {
     const result = runSelfhostPreflight({
       AUTH_MODE: "local_noauth",

@@ -12,6 +12,13 @@ import type {
 // Cost constants
 // ---------------------------------------------------------------------------
 
+// AnyAPI's catalog lists per-page pricing. Bound pagination and each purchase;
+// estimates use these same ceilings, without native DataForSEO markup.
+export const ANYAPI_MAX_PAGE_COST_USD = 0.002;
+export function anyapiRankMaxPages(depth: number) {
+  return Math.ceil(depth / 10);
+}
+
 /** DataForSEO Live API: cost of first page (10 results) */
 const LIVE_BASE_PAGE_COST_USD = 0.002;
 
@@ -90,6 +97,20 @@ export function estimateRankCheckCredits(
   depth: number,
   method: RankCheckMethod,
 ) {
+  if (devices === "provider") {
+    const costUsd = roundUsdForBilling(
+      keywords.length * anyapiRankMaxPages(depth) * ANYAPI_MAX_PAGE_COST_USD,
+    );
+    // Hosted Treg resale remains unavailable. This credit figure is only the
+    // existing approval unit; Treg debits its actual per-page USD receipts.
+    return {
+      costUsd,
+      costCredits:
+        keywords.length *
+        anyapiRankMaxPages(depth) *
+        creditsForProviderUsd(ANYAPI_MAX_PAGE_COST_USD),
+    };
+  }
   // One entry per keyword/device pair, keyword-major like the workflow's
   // task list, so queued chunks group the same pairs the real posts do.
   const checkMultipliers = keywords.flatMap((keyword) =>
@@ -145,12 +166,13 @@ export function estimateScheduledRankCheckCredits(
   devices: RankTrackingConfig["devices"],
   depth: number,
   scheduleInterval: ScheduledRankTrackingInterval,
+  method: RankCheckMethod = "queued",
 ) {
   const { costUsd, costCredits } = estimateRankCheckCredits(
     keywords,
     devices,
     depth,
-    "queued",
+    method,
   );
   const checksPerMonth = scheduledChecksPerMonth(scheduleInterval);
   return {
@@ -358,6 +380,7 @@ export function computeNextCheckAt(
 // ---------------------------------------------------------------------------
 
 export function devicesLabel(devices: RankTrackingConfig["devices"]): string {
+  if (devices === "provider") return "AnyAPI (provider-managed device)";
   if (devices === "both") return "Desktop + Mobile";
   return devices === "desktop" ? "Desktop" : "Mobile";
 }

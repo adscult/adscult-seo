@@ -38,12 +38,21 @@ export function CheckConfirmModal({
       onConfirm={onRunNow}
       onClose={onCancel}
     >
-      {keywordCount} keywords &times; {dc} device{dc !== 1 ? "s" : ""} ={" "}
-      {totalChecks} SERP checks. Results in ~{eta}.
+      {devices === "provider" ? (
+        <>
+          {keywordCount} keywords through AnyAPI. Results can take several
+          minutes per batch.
+        </>
+      ) : (
+        <>
+          {keywordCount} keywords &times; {dc} device{dc !== 1 ? "s" : ""} ={" "}
+          {totalChecks} SERP checks. Results in ~{eta}.
+        </>
+      )}
       {costUsd != null ? (
         <>
           {" "}
-          Costs about{" "}
+          {devices === "provider" ? "Costs up to" : "Costs about"}{" "}
           <span className="font-mono font-semibold text-foreground">
             ${costUsd.toFixed(2)}
           </span>

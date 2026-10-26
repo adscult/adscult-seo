@@ -98,9 +98,12 @@ export async function insertSnapshots(
   snapshots: Array<
     Omit<InferInsertModel<typeof rankSnapshots>, "id" | "checkedAt">
   >,
+  upstreamVendor = "dataforseo",
 ) {
-  const providerResultSourceId =
-    await recordProviderResultSource("serp.rankCheck");
+  const providerResultSourceId = await recordProviderResultSource(
+    "serp.rankCheck",
+    upstreamVendor,
+  );
   // Target the (run, keyword, device) unique index explicitly. An UNtargeted
   // ON CONFLICT DO NOTHING also swallows a primary-key collision, which would
   // silently drop every row if the `id` serial sequence ever drifts behind

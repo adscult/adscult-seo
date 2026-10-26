@@ -1,9 +1,13 @@
+import { getScopedProviderExecution, withProviderScope } from "./context";
+import { fetchAnyapiRank } from "./treg/anyapi-rank";
+import { AppError } from "@/server/lib/errors";
 import { z } from "zod";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { fetchRankCheckTaskResult } from "@/server/lib/dataforseo";
 import {
   executeProviderOperation,
   normalizeProviderFailure,
+  executeProviderReadOperation,
 } from "./operation";
 import {
   rankCheckResultSchema,
@@ -11,7 +15,7 @@ import {
   type RankTaskRequest,
 } from "./contracts/rank-check";
 
-function rankScope(input: Omit<RankTaskRequest, "tasks">) {
+function rankScope(input: Omit<RankTaskRequest, "tasks">, anyapi: boolean) {
   return {
     engine: "google" as const,
     targetDomain: input.targetDomain,
@@ -19,21 +23,24 @@ function rankScope(input: Omit<RankTaskRequest, "tasks">) {
     languageCode: input.languageCode,
     locationName: input.locationName ?? null,
     depth: Math.min(100, Math.max(10, input.depth)),
-    positionSemantics: "organic_rank_with_absolute_fallback" as const,
+    positionSemantics: anyapi
+      ? ("organic_rank_across_pages" as const)
+      : ("organic_rank_with_absolute_fallback" as const),
   };
 }
 
 export function fetchRankChecks(
   customer: BillingCustomerContext,
   inputs: RankCheckRequest[],
+  searchProvider: "anyapi" | "dataforseo" = "dataforseo",
 ) {
-  return executeProviderOperation(
-    customer,
-    "serp.rankCheck",
-    async (client, warnings) => {
-      // Keep one credit reservation/settlement for the entire batch. Calling a
-      // per-keyword metered method here would change the billing contract.
-      const settled = await client.serp.rankCheckBatch(inputs);
+  return withProviderScope(customer.organizationId, async () => {
+    const execution = await getScopedProviderExecution();
+    const anyapi = searchProvider === "anyapi";
+    const run = (
+      settled: PromiseSettledResult<unknown>[],
+      warnings: string[],
+    ) => {
       const items = inputs.map((input, inputIndex) => {
         const outcome = settled[inputIndex];
         let result;
@@ -58,7 +65,7 @@ export function fetchRankChecks(
           keywordId: input.keywordId,
           keyword: input.keyword,
           device: input.device,
-          scope: rankScope(input),
+          scope: rankScope(input, anyapi),
           result,
         };
       });
@@ -68,8 +75,36 @@ export function fetchRankChecks(
           `Rank checks unavailable for ${failed} of ${inputs.length} inputs.`,
         );
       return { items };
-    },
-  );
+    };
+    if (anyapi)
+      return executeProviderReadOperation(
+        "serp.rankCheck",
+        async (warnings) => {
+          if (!execution || execution.provider !== "treg")
+            throw new AppError("SEO_PROVIDER_UNSUPPORTED");
+          return run(
+            await Promise.allSettled(
+              inputs.map((input) => fetchAnyapiRank(execution, input)),
+            ),
+            warnings,
+          );
+        },
+        { upstreamVendor: "anyapi" },
+      );
+    return executeProviderOperation(
+      customer,
+      "serp.rankCheck",
+      async (client, warnings) => {
+        const nativeInputs = inputs.map((input) => {
+          if (input.device === "provider")
+            throw new AppError("VALIDATION_ERROR");
+          return { ...input, device: input.device };
+        });
+        // Preserve one reservation/settlement for the native batch.
+        return run(await client.serp.rankCheckBatch(nativeInputs), warnings);
+      },
+    );
+  });
 }
 
 export function postRankTasks(
@@ -95,7 +130,7 @@ export function postRankTasks(
       return {
         tasks,
         requestedCount: input.tasks.length,
-        scope: rankScope(input),
+        scope: rankScope(input, false),
       };
     },
   );

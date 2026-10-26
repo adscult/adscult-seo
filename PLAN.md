@@ -1,7 +1,8 @@
 # PLAN.md — Pluggable SEO Providers with an Admin Switcher
 
-Status: DataForSEO adapter migration and administrator configuration are implemented and regression-checked. Treg live validation and deployment gates remain unverified. See [the implementation handoff](docs/maintainers/provider-implementation.md) for evidence and limitations.
-Treg follow-up: free account authentication passed with the supplied test token. The user authorized free checks only; paid SEO contracts and billing remain unverified, so Treg activation stays disabled.
+Status: DataForSEO migration and provider administration are implemented and regression-checked. Treg has a verified keyword/SERP/domain subset and is active locally. Rank trackers now offer AnyAPI (the default for new Treg trackers) or DataForSEO, with separate AnyAPI device history. Broader Treg coverage and deployment gates remain unverified. See [the implementation handoff](docs/maintainers/provider-implementation.md) for evidence and limitations.
+Treg follow-up: 28 documented catalog route mappings are implemented. After authorization for a USD 0.25 verification budget, seven paid probes passed at a total cost of USD 0.087116. Verified keyword/SERP/domain operations are enabled and Treg is active locally at revision 2. Unverified operations and hosted resale remain gated. See [the operation contracts](docs/maintainers/treg-operation-contracts.md).
+Backlinks follow-up: list, referring-domain, linked-page and history routes passed live validation and are enabled through Treg. The backlink overview now includes its verified subfolder/history dependencies. See the operation contracts for receipts and the remaining verification budget.
 
 Target: OpenSEO (`every-app/open-seo`).
 Goal: support DataForSEO directly and verified SEO operations through Treg, with an administrator-controlled switch that does not require an application restart.

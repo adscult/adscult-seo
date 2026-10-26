@@ -10,7 +10,10 @@ import {
   encodeBasicCredentials,
   sealProviderCredentials,
 } from "@/server/providers/credentials";
-import { getOptionalEnvValue } from "@/server/lib/runtime-env";
+import {
+  getOptionalEnvValue,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 import { AppError } from "@/server/lib/errors";
 import {
   providerCandidateSchema,
@@ -245,8 +248,12 @@ async function activate(
     context.organizationId,
     candidateId,
   );
-  // Treg is gated on contract, smoke, billing and result provenance readiness.
-  if (execution.provider !== "dataforseo")
+  // Require verified operation contracts, including after an adapter upgrade.
+  // Hosted Treg resale needs separate receipt/reservation billing verification.
+  if (
+    !readiness(execution.provider).ready ||
+    (execution.provider === "treg" && (await isHostedServerAuthMode()))
+  )
     throw new AppError("SEO_PROVIDER_UNSUPPORTED");
   const test = await ProviderRepository.latestTest(
     context.organizationId,

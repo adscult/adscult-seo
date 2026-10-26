@@ -16,7 +16,12 @@ export function normalizeProviderFailure(cause: unknown): Failure {
       message: "UPSTREAM_UNAVAILABLE",
       retryable: false,
     };
-  if (cause instanceof Error && cause.name === "DataForSEOTimeoutError")
+  if (
+    cause instanceof Error &&
+    ["DataForSEOTimeoutError", "TimeoutError", "AbortError"].includes(
+      cause.name,
+    )
+  )
     return {
       code: "TIMEOUT",
       message: "SEO_PROVIDER_TIMEOUT",
@@ -27,6 +32,7 @@ export function normalizeProviderFailure(cause: unknown): Failure {
       VALIDATION_ERROR: "INVALID_REQUEST",
       INSUFFICIENT_CREDITS: "INSUFFICIENT_CREDITS",
       DATAFORSEO_AUTH_FAILED: "AUTH_FAILED",
+      SEO_PROVIDER_AUTH_FAILED: "AUTH_FAILED",
       RATE_LIMITED: "RATE_LIMITED",
       UPSTREAM_UNAVAILABLE: "UPSTREAM_ERROR",
       SEO_PROVIDER_UNSUPPORTED: "UNSUPPORTED",
@@ -67,7 +73,12 @@ export function executeProviderOperation<T>(
     client: ReturnType<typeof createDataforseoClient>,
     warnings: string[],
   ) => Promise<T>,
-  semantics?: Pick<ProviderResult<T>["meta"], "scope" | "metricDefinitions">,
+  semantics?: Partial<
+    Pick<
+      ProviderResult<T>["meta"],
+      "scope" | "metricDefinitions" | "upstreamVendor"
+    >
+  >,
 ): Promise<ProviderResult<T>> {
   return withProviderScope(customer.organizationId, () =>
     executeProviderReadOperation(
@@ -84,15 +95,17 @@ export function executeProviderOperation<T>(
 export async function executeProviderReadOperation<T>(
   operation: (typeof providerOperations)[number]["operation"],
   read: (warnings: string[]) => Promise<T>,
-  semantics?: Pick<ProviderResult<T>["meta"], "scope" | "metricDefinitions">,
+  semantics?: Partial<
+    Pick<
+      ProviderResult<T>["meta"],
+      "scope" | "metricDefinitions" | "upstreamVendor"
+    >
+  >,
 ): Promise<ProviderResult<T>> {
   const execution = await getScopedProviderExecution();
   const meta = {
     provider: execution?.provider ?? "dataforseo",
-    upstreamVendor:
-      (execution?.provider ?? "dataforseo") === "dataforseo"
-        ? "dataforseo"
-        : "unverified",
+    upstreamVendor: "dataforseo",
     operation,
     settingsRevision: execution?.revision ?? 0,
     fetchedAt: new Date().toISOString(),
@@ -102,7 +115,7 @@ export async function executeProviderReadOperation<T>(
   const available = getProviderAdapter(execution?.provider ?? "dataforseo")
     .capabilities()
     .some((item) => item.operation === operation && item.state === "available");
-  if ((execution?.provider ?? "dataforseo") !== "dataforseo" || !available)
+  if (!available)
     return {
       ok: false,
       error: {

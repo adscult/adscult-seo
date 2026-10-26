@@ -37,13 +37,13 @@ import {
   getEnvValueSync,
   isHostedServerAuthMode,
 } from "@/server/lib/runtime-env";
+import { resolveSamToolRole } from "./samToolAuth";
 import {
   checkUsageCreditsDepleted,
   trackUsageCreditSpend,
 } from "@/server/billing/subscription";
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { MCP_SCOPE } from "@/lib/oauth-resource";
-import { AuthRepository } from "@/server/auth/repositories/AuthRepository";
 import type { ToolAuthContext } from "@/server/mcp/context";
 
 // SAM's read-only view of the project's shared memory. The block has no `set`
@@ -330,8 +330,7 @@ export class SamChatAgent extends Think {
       // confirmed against a second Autumn read path before refusing — a
       // stale check reading here once locked a paying customer out of chat.
       const { organizationId } = ctx.project;
-      const hosted = await isHostedServerAuthMode();
-      if (hosted) {
+      if (await isHostedServerAuthMode()) {
         const { depleted, monthlyRemaining } = await checkUsageCreditsDepleted({
           userId: ctx.row.userId,
           userEmail: ctx.userEmail,
@@ -350,16 +349,16 @@ export class SamChatAgent extends Think {
       const baseUrl =
         (await this.ctx.storage.get<string>(PUBLIC_ORIGIN_KEY)) ??
         "https://app.openseo.so";
-      // Delegated/self-host orgs have no member rows — implicit owner. In
-      // hosted mode a missing member row means the user was removed from the
+      // In hosted mode a missing member row means the user was removed from the
       // workspace; fail closed instead of letting the open socket keep
       // owner-level tools (WebSockets authorize at connect time only, so this
       // per-turn check is what actually revokes a removed member's chat).
-      const membership = await AuthRepository.getMembership(
-        ctx.row.userId,
+      const role = await resolveSamToolRole({
+        userId: ctx.row.userId,
+        userEmail: ctx.userEmail,
         organizationId,
-      );
-      if (hosted && !membership) {
+      });
+      if (!role) {
         turn.refusal = "no_access";
         return this.refusalTurn(
           "You no longer have access to this organization, so I can't continue this chat.",
@@ -369,7 +368,7 @@ export class SamChatAgent extends Think {
         userId: ctx.row.userId,
         userEmail: ctx.userEmail,
         organizationId,
-        role: membership?.role ?? "owner",
+        role,
         // SAM sessions belong to one project's workspace; org context is
         // fixed for the session, like an OAuth token's.
         orgScope: "pinned",

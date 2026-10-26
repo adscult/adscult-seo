@@ -171,6 +171,14 @@ function buildRankTrackingExport(
       : "Volume",
     "KD",
     "CPC",
+    ...(!showDesktop && !showMobile
+      ? [
+          "AnyAPI Position",
+          "AnyAPI Change",
+          "AnyAPI URL",
+          "AnyAPI SERP Features",
+        ]
+      : []),
     ...(showDesktop
       ? [
           "Desktop Position",
@@ -195,6 +203,17 @@ function buildRankTrackingExport(
     row.searchVolume ?? "",
     row.keywordDifficulty ?? "",
     row.cpc ?? "",
+    ...(!showDesktop && !showMobile
+      ? [
+          row.provider?.position ?? "",
+          csvChange(
+            row.provider?.position ?? null,
+            row.provider?.previousPosition ?? null,
+          ),
+          row.provider?.rankingUrl ?? "",
+          row.provider?.serpFeatures.join(", ") ?? "",
+        ]
+      : []),
     ...(showDesktop
       ? [
           row.desktop.position ?? "",

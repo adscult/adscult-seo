@@ -10,7 +10,8 @@ export type ToolAuthContext = {
   organizationId: string;
   // Org role for permission gates (owner/admin/member, comma-joined when
   // multiple). Hosted: stamped per request from the member row in
-  // transport.ts. Self-host/delegated: one implicit user per org → "owner".
+  // transport.ts. Cloudflare Access also stamps the current team role.
+  // Local no-auth has one implicit owner.
   role: string;
   // How tool calls bind to an organization. "pinned": the request's
   // organizationId is the authorization boundary — self-host and SAM, which
@@ -46,9 +47,8 @@ const applicationAuthContextSchema = z.object({
   userId: z.string().min(1),
   userEmail: z.string().min(1),
   organizationId: z.string().min(1),
-  // Absent from OAuth grant props (role is stamped per request by the hosted
-  // transport, never baked into tokens) and from delegated modes (implicit
-  // owner).
+  // Absent from OAuth grants; authenticated transports stamp the current role
+  // per request. Older pinned contexts may omit it for compatibility.
   role: z.string().min(1).optional(),
   // Stamped per request by the hosted transport, never baked into tokens;
   // absent (self-host, SAM) means "pinned".
@@ -136,9 +136,8 @@ export function createMcpToolContext(
   const clientId = authInfo?.clientId ?? applicationAuth.clientId ?? null;
   const scopes = authInfo?.scopes ?? applicationAuth.scopes ?? [];
   const orgScope = applicationAuth.orgScope ?? "pinned";
-  // Delegated/self-hosted modes have no member rows and a single implicit owner
-  // per org; "pinned" without a role means owner. Hosted ("user" scope)
-  // stamps the role from the member row per request in transport.ts.
+  // Legacy pinned contexts default to owner. Authenticated transports stamp
+  // the current role explicitly, including Cloudflare Access team roles.
   const role =
     applicationAuth.role ?? (orgScope === "pinned" ? "owner" : undefined);
   if (!role) {

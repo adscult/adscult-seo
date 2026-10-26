@@ -42,15 +42,17 @@ export interface RobotsResult {
 async function fetchRobotsTxtText(
   origin: string,
   access?: CrawlerAccess | null,
+  options?: DiscoveryOptions,
 ): Promise<string | null> {
   try {
     const fetched = await fetchFollowingRedirects(
       `${origin}/robots.txt`,
       10_000,
       access,
+      options,
     );
     if (!fetched?.response.ok) return null;
-    return (await fetched.response.text()).slice(0, MAX_ROBOTS_TXT_BYTES);
+    return await readBodyCapped(fetched.response, MAX_ROBOTS_TXT_BYTES, true);
   } catch (error) {
     console.warn("Failed to fetch robots.txt:", error);
     return null;
@@ -58,6 +60,14 @@ async function fetchRobotsTxtText(
 }
 
 const MAX_DISCOVERY_REDIRECT_HOPS = 5;
+
+interface DiscoveryOptions {
+  maxDocuments?: number;
+  maxUrls?: number;
+  signal?: AbortSignal;
+  restrictOrigin?: string;
+  prioritizeContent?: boolean;
+}
 
 /**
  * Redirects are followed by hand so each hop is revalidated against the crawl
@@ -68,18 +78,28 @@ async function fetchFollowingRedirects(
   url: string,
   timeoutMs: number,
   access: CrawlerAccess | null | undefined,
+  options?: DiscoveryOptions,
 ): Promise<{ response: Response; finalUrl: string } | null> {
   // One budget for the whole chain, as the automatic follow had.
   const deadline = Date.now() + timeoutMs;
   let current = url;
   for (let hop = 0; hop <= MAX_DISCOVERY_REDIRECT_HOPS; hop++) {
+    if (
+      !isCrawlableUrl(current) ||
+      (options?.restrictOrigin &&
+        !isSameOrigin(current, options.restrictOrigin))
+    )
+      return null;
+    const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
     const response = await fetch(current, {
       headers: {
         "User-Agent": "OpenSEO-Audit/1.0",
         ...crawlerHeadersFor(current, access),
       },
       redirect: "manual",
-      signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      signal: options?.signal
+        ? AbortSignal.any([timeout, options.signal])
+        : timeout,
     });
 
     if (response.status < 300 || response.status >= 400) {
@@ -184,6 +204,7 @@ function isTimeoutError(error: unknown): boolean {
 async function readBodyCapped(
   response: Response,
   maxBytes: number,
+  truncate = false,
 ): Promise<string | null> {
   if (!response.body) return "";
   const reader = response.body.getReader();
@@ -195,7 +216,10 @@ async function readBodyCapped(
     total += value.byteLength;
     if (total > maxBytes) {
       await reader.cancel();
-      return null;
+      if (!truncate) return null;
+      chunks.push(value.subarray(0, maxBytes - (total - value.byteLength)));
+      total = maxBytes;
+      break;
     }
     chunks.push(value);
   }
@@ -211,6 +235,7 @@ async function readBodyCapped(
 async function fetchSitemapDocumentWithRetry(
   sitemapUrl: string,
   access?: CrawlerAccess | null,
+  options?: DiscoveryOptions,
 ): Promise<{
   nestedSitemaps: string[];
   pageUrls: string[];
@@ -229,6 +254,7 @@ async function fetchSitemapDocumentWithRetry(
         normalizedSitemapUrl,
         SITEMAP_FETCH_TIMEOUT_MS,
         access,
+        options,
       );
       if (!fetched) {
         return { nestedSitemaps: [], pageUrls: [], timedOut: false };
@@ -285,15 +311,17 @@ export async function discoverUrls(
   origin: string,
   maxPages = 50,
   access?: CrawlerAccess | null,
-): Promise<{ urls: string[]; robotsText: string | null }> {
-  const robotsText = await fetchRobotsTxtText(origin, access);
+  options?: DiscoveryOptions,
+): Promise<{ urls: string[]; robotsText: string | null; incomplete: boolean }> {
+  const robotsText = await fetchRobotsTxtText(origin, access, options);
   const robots = parseRobotsTxt(origin, robotsText);
 
   // Collect sitemap URLs: from robots.txt + default location
   const sitemapSources = new Set(robots.sitemapUrls);
   sitemapSources.add(`${origin}/sitemap.xml`);
 
-  const maxDiscoveredUrls = Math.min(Math.max(maxPages * 20, 500), 50_000);
+  const maxDiscoveredUrls =
+    options?.maxUrls ?? Math.min(Math.max(maxPages * 20, 500), 50_000);
   const allUrls = new Set<string>();
 
   const queue: Array<{ url: string; depth: number }> = Array.from(
@@ -307,12 +335,30 @@ export async function discoverUrls(
   let fetchedDocs = 0;
   let failedDocs = 0;
   let timedOutDocs = 0;
+  let depthLimited = false;
 
   while (queue.length > 0 && allUrls.size < maxDiscoveredUrls) {
-    if (fetchedDocs >= MAX_SITEMAP_DOCS) {
+    if (
+      fetchedDocs >= (options?.maxDocuments ?? MAX_SITEMAP_DOCS) ||
+      options?.signal?.aborted
+    ) {
       break;
     }
-    const batch = queue.splice(0, SITEMAP_CONCURRENCY);
+    // Comparisons read planning pages before a product shard fills the budget.
+    // Existing audits retain their discovery order and concurrency.
+    if (options?.prioritizeContent)
+      queue.sort(
+        (a, b) =>
+          Number(/products?/i.test(new URL(a.url).pathname)) -
+          Number(/products?/i.test(new URL(b.url).pathname)),
+      );
+    const batch = queue.splice(
+      0,
+      Math.min(
+        options?.prioritizeContent ? 1 : SITEMAP_CONCURRENCY,
+        (options?.maxDocuments ?? MAX_SITEMAP_DOCS) - fetchedDocs,
+      ),
+    );
     await Promise.all(
       batch.map(async ({ url, depth }) => {
         const normalizedUrl = normalizeUrl(url);
@@ -331,6 +377,7 @@ export async function discoverUrls(
         const result = await fetchSitemapDocumentWithRetry(
           normalizedUrl,
           access,
+          options,
         );
         if (
           result.pageUrls.length === 0 &&
@@ -349,7 +396,10 @@ export async function discoverUrls(
           allUrls.add(pageUrl);
         }
 
-        if (depth <= 1) return;
+        if (depth <= 1) {
+          if (result.nestedSitemaps.length) depthLimited = true;
+          return;
+        }
 
         for (const nestedUrl of result.nestedSitemaps) {
           if (!isSameOrigin(nestedUrl, origin)) continue;
@@ -377,5 +427,11 @@ export async function discoverUrls(
   return {
     urls: Array.from(allUrls),
     robotsText,
+    incomplete:
+      failedDocs > 0 ||
+      depthLimited ||
+      queue.length > 0 ||
+      allUrls.size >= maxDiscoveredUrls ||
+      !!options?.signal?.aborted,
   };
 }

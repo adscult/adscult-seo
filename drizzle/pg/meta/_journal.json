@@ -260,6 +260,13 @@
       "when": 1792447545402,
       "tag": "0036_gifted_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792512667067,
+      "tag": "0037_glorious_frightful_four",
+      "breakpoints": true
     }
   ]
 }

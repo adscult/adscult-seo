@@ -217,6 +217,8 @@ export async function postRankCheckTasks(input: {
   depth: number;
   targetDomain: string;
 }): Promise<DataforseoApiResponse<PostedRankCheckTask[]>> {
+  if (input.tasks.some((task) => task.device === "provider"))
+    throw new AppError("VALIDATION_ERROR");
   if (input.tasks.length === 0 || input.tasks.length > MAX_TASKS_PER_POST) {
     throw new AppError(
       "INTERNAL_ERROR",

@@ -11,16 +11,16 @@ export const rankCheckResultSchema = z.object({
   serpFeatures: z.array(z.string()),
 });
 export type RankCheckResult = z.infer<typeof rankCheckResultSchema>;
-export interface RankCheckRequest extends SerpRequest {
+export interface RankCheckRequest extends Omit<SerpRequest, "device"> {
   keywordId: string;
   targetDomain: string;
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
   depth: number;
 }
 export interface RankCheckTaskInput {
   keyword: string;
   keywordId: string;
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
 }
 export interface PostedRankCheckTask extends RankCheckTaskInput {
   taskId: string;

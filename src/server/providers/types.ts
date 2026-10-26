@@ -39,7 +39,7 @@ export type ProviderResult<T> =
     };
 
 // Explicit inventory, rather than treating discovery/metrics or live/queued
-// operations as interchangeable. Treg has no smoke-verified operation yet.
+// operations as interchangeable. Each adapter reports its verified coverage.
 export const providerOperations = [
   { operation: "serp.live", label: "Live Google search results" },
   { operation: "serp.rankCheck", label: "Live rank checks" },
@@ -83,6 +83,8 @@ export const providerOperations = [
 ] as const;
 
 export interface ProviderExecution {
+  /** Only the operator's budgeted verification runner sets this. */
+  readonly purpose?: "verification";
   readonly organizationId: string;
   readonly provider: SeoProviderId;
   readonly revision: number;

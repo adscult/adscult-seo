@@ -10,6 +10,7 @@ export async function recordProviderResultSource(
     | "keywords.research"
     | "keywords.metrics"
     | "ai.answers",
+  upstreamVendor = "dataforseo",
 ): Promise<string | null> {
   const execution = await getScopedProviderExecution();
   // Unscoped imports and historical/client-supplied metrics are unattributed.
@@ -19,7 +20,7 @@ export async function recordProviderResultSource(
     id,
     organizationId: execution.organizationId,
     provider: execution.provider,
-    upstreamVendor: "dataforseo",
+    upstreamVendor,
     operation,
     configurationId: execution.credentialVersion,
     revision: execution.revision,

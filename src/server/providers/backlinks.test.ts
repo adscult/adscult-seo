@@ -36,6 +36,16 @@ beforeEach(() => {
   });
   mocks.summary.mockResolvedValue({ backlinks: 0, private_payload: "raw" });
   mocks.history.mockResolvedValue([]);
+  mocks.rows.mockResolvedValue({
+    items: [
+      {
+        url_from: "https://source.example/link",
+        url_to: "https://www.rkumar.in/collections/frame-montana",
+        rank: 0,
+      },
+    ],
+    totalCount: 2,
+  });
 });
 
 it("declares backlink metric identity and keeps unavailable page history and scores distinct from measured zero", async () => {
@@ -62,18 +72,42 @@ it("declares backlink metric identity and keeps unavailable page history and sco
   expect(JSON.stringify(result)).not.toMatch(/private_payload|server-only/);
 });
 
-it("reports unverified backlinks as unavailable without returning a fabricated empty page or calling the vendor", async () => {
-  mocks.execution.mockResolvedValueOnce({ provider: "treg", revision: 4 });
-  const result = await fetchBacklinksPage(customer, {
-    target: "example.com",
-    page: 1,
-    pageSize: 10,
-    sortField: "rank",
-    sortOrder: "desc",
-    filters: {},
-    mode: "as_is",
-  });
-  expect(result).toMatchObject({ ok: false, error: { code: "UNSUPPORTED" } });
-  expect(result).not.toHaveProperty("data");
-  expect(mocks.rows).not.toHaveBeenCalled();
-});
+it.each(["overview", "rows"])(
+  "allows Treg subfolder %s after its backlink dependencies are verified",
+  async (kind) => {
+    mocks.execution.mockResolvedValue({ provider: "treg", revision: 4 });
+    const input = {
+      target: "https://www.rkumar.in/collections/frame-montana",
+      scope: "subfolder" as const,
+    };
+    const result =
+      kind === "overview"
+        ? await fetchBacklinksOverview(customer, input)
+        : await fetchBacklinksPage(customer, {
+            ...input,
+            page: 1,
+            pageSize: 10,
+            sortField: "rank",
+            sortOrder: "desc",
+            filters: {},
+            mode: "as_is",
+          });
+    expect(result).toMatchObject({
+      ok: true,
+      meta: { provider: "treg", scope: { researchScope: "subfolder" } },
+    });
+    if (kind === "overview")
+      expect(result).toMatchObject({
+        data: {
+          overview: { summary: { backlinks: 2, rank: null }, trends: [] },
+        },
+      });
+    else
+      expect(result).toMatchObject({
+        data: {
+          rows: [{ rank: 0, urlFrom: "https://source.example/link" }],
+          totalCount: 2,
+        },
+      });
+  },
+);

@@ -170,3 +170,17 @@ describe("rank tracking schedules", () => {
     );
   });
 });
+
+it("bounds AnyAPI estimates by page purchases, without native operator surcharges", () => {
+  expect(
+    estimateRankCheckCredits(
+      ["coffee", "site:example.com"],
+      "provider",
+      40,
+      "live",
+    ).costUsd,
+  ).toBe(0.016);
+  expect(
+    estimateRankCheckCredits(["coffee"], "provider", 40, "queued").costUsd,
+  ).toBe(0.008);
+});

@@ -13,6 +13,35 @@ const execution = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("provider connection contract", () => {
+  it.each(["dataforseo", "treg"] as const)(
+    "authenticates %s with Worker-compatible redirect handling",
+    async (provider) => {
+      const request = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async (_url, init) => {
+          // The local workerd runtime rejects this mode before any HTTP call.
+          if (init?.redirect === "error")
+            throw new TypeError("Unsupported redirect mode");
+          return Response.json(
+            provider === "dataforseo"
+              ? {
+                  status_code: 20000,
+                  tasks: [{ status_code: 20000, result: [{}] }],
+                }
+              : { org_id: 1, org: "test-team" },
+          );
+        });
+      vi.stubGlobal("fetch", request);
+      expect(
+        await getProviderAdapter(provider).testConnection({
+          ...execution,
+          provider,
+        }),
+      ).toMatchObject({ ok: true, data: { authenticated: true } });
+      expect(request).toHaveBeenCalledOnce();
+    },
+  );
+
   it.each([
     { http: 401, vendor: 20000, code: "AUTH_FAILED" },
     { http: 402, vendor: 20000, code: "QUOTA_EXCEEDED" },
@@ -79,7 +108,7 @@ describe("provider connection contract", () => {
     ).toMatchObject({ ok: false });
     expect(request).toHaveBeenCalledExactlyOnceWith(
       "https://api.dataforseo.com/v3/appendix/user_data",
-      expect.objectContaining({ redirect: "error" }),
+      expect.objectContaining({ redirect: "manual" }),
     );
   });
 

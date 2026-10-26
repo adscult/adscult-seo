@@ -6,6 +6,7 @@ import {
 } from "@/server/auth/delegated-organization";
 import { eq } from "drizzle-orm";
 import type { EnsuredUserContext } from "./types";
+import { SelfhostTeamService } from "@/server/auth/SelfhostTeamService";
 
 const LOCAL_ADMIN_USER_ID = "local-admin";
 const LOCAL_ADMIN_EMAIL = "admin@localhost";
@@ -86,15 +87,14 @@ export async function resolveSharedWorkspaceContext(
 ): Promise<EnsuredUserContext> {
   const ensuredEmail = await ensureUserRecord(userId, userEmail);
   const organizationId = await ensureSharedWorkspaceOrganization();
+  const role = await SelfhostTeamService.join(userId, ensuredEmail);
 
   return {
     userId,
     userEmail: ensuredEmail,
     emailVerified: true,
     organizationId,
-    // The Access policy is the authorization boundary; everyone it admits has
-    // full control of the shared workspace.
-    role: "owner",
+    role,
   };
 }
 

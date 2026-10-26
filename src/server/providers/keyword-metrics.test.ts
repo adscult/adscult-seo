@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { AppError } from "@/server/lib/errors";
 import { fetchKeywordMetrics } from "./keyword-metrics";
+import { withProviderExecution } from "./context";
 
 const { overview } = vi.hoisted(() => ({ overview: vi.fn() }));
 vi.mock("@/server/providers/resolver", () => ({
@@ -19,6 +20,34 @@ vi.mock("@/server/lib/dataforseo", () => ({
 
 beforeEach(() => {
   overview.mockResolvedValue([]);
+});
+
+it("refuses unverified local volume before purchasing the national metrics leg", async () => {
+  const customer = {
+    organizationId: "organization",
+    userId: "user",
+    userEmail: "user@example.com",
+  };
+  const result = await withProviderExecution(
+    {
+      ...customer,
+      provider: "treg",
+      revision: 2,
+      credentialVersion: "configuration",
+      source: "database",
+      authorization: "server-only",
+    },
+    () =>
+      fetchKeywordMetrics(customer, {
+        keywords: ["coffee"],
+        locationCode: 2356,
+        locationName: "Mumbai,Maharashtra,India",
+        languageCode: "en",
+        creditFeature: "keyword_research",
+      }),
+  );
+  expect(result).toMatchObject({ ok: false, error: { code: "UNSUPPORTED" } });
+  expect(overview).not.toHaveBeenCalled();
 });
 
 it("isolates malformed metric values from other keywords in the same response", async () => {

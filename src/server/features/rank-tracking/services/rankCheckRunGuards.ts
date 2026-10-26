@@ -34,7 +34,9 @@ type RankCheckWorkflowStatus = {
   };
 };
 
-type RankCheckConfigForStart = Pick<
+type RankCheckConfigForStart = {
+  searchProvider?: RankTrackingConfig["searchProvider"];
+} & Pick<
   RankTrackingConfig,
   | "id"
   | "domain"
@@ -173,6 +175,7 @@ export async function beginRankCheckRun(input: {
             languageCode: input.config.languageCode,
             locationName: input.config.locationName ?? undefined,
             devices: input.config.devices,
+            searchProvider: input.config.searchProvider ?? "dataforseo",
             serpDepth: input.config.serpDepth,
             trigger: input.trigger,
             keywordIds: input.keywordIds,

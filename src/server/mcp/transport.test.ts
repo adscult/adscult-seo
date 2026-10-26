@@ -140,11 +140,13 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
       userId: "local-admin",
       userEmail: "admin@localhost",
       organizationId: "delegated-local-admin",
+      role: "owner",
     });
     selfHostedAuthMocks.resolveCloudflareAccessContext.mockResolvedValue({
       userId: "cloudflare-user",
       userEmail: "person@example.com",
       organizationId: "delegated-cloudflare-user",
+      role: "member",
     });
   });
 
@@ -156,6 +158,7 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
         userId: "local-admin",
         userEmail: "admin@localhost",
         organizationId: "delegated-local-admin",
+        role: "owner",
       },
     ],
     [
@@ -165,6 +168,7 @@ describe("handleSelfHostedOpenSeoMcpRequest", () => {
         userId: "cloudflare-user",
         userEmail: "person@example.com",
         organizationId: "delegated-cloudflare-user",
+        role: "member",
       },
     ],
   ])(

@@ -181,33 +181,48 @@ function PinButton({
 }
 
 function makeDeviceColumn(
-  device: "desktop" | "mobile",
+  device: "desktop" | "mobile" | "provider",
 ): ColumnDef<RankTrackingRow> {
-  const id = device === "desktop" ? "desktopPosition" : "mobilePosition";
+  const id = `${device}Position` as const;
   return {
     id,
-    accessorFn: (row) => row[device].position ?? undefined,
+    accessorFn: (row) => row[device]?.position ?? undefined,
     header: ({ column }) => (
       <SortableHeader
         column={column}
-        label="Position"
-        title={HEADER_TOOLTIPS[id]}
+        label={device === "provider" ? "AnyAPI position" : "Position"}
+        title={
+          device === "provider"
+            ? "Organic position reported by AnyAPI, using its own device."
+            : HEADER_TOOLTIPS[id]
+        }
         className={RANK_TRACKING_HEADER_CLASS}
       />
     ),
     size: 120,
     maxSize: 140,
-    cell: ({ row }) => <DeviceRankCell result={row.original[device]} />,
+    cell: ({ row }) => (
+      <DeviceRankCell
+        result={
+          row.original[device] ?? {
+            position: null,
+            previousPosition: null,
+            rankingUrl: null,
+            serpFeatures: [],
+          }
+        }
+      />
+    ),
     sortUndefined: "last",
   };
 }
 
 function makeUrlColumn(
-  device: "desktop" | "mobile",
+  device: "desktop" | "mobile" | "provider",
   domain: string,
 ): ColumnDef<RankTrackingRow> {
   return {
-    id: device === "desktop" ? "desktopUrl" : "mobileUrl",
+    id: `${device}Url`,
     enableSorting: false,
     header: () => (
       <span
@@ -219,16 +234,26 @@ function makeUrlColumn(
     ),
     size: 240,
     cell: ({ row }) => (
-      <DeviceUrlCell result={row.original[device]} domain={domain} />
+      <DeviceUrlCell
+        result={
+          row.original[device] ?? {
+            position: null,
+            previousPosition: null,
+            rankingUrl: null,
+            serpFeatures: [],
+          }
+        }
+        domain={domain}
+      />
     ),
   };
 }
 
 function makeSerpColumn(
-  device: "desktop" | "mobile",
+  device: "desktop" | "mobile" | "provider",
 ): ColumnDef<RankTrackingRow> {
   return {
-    id: device === "desktop" ? "desktopSerp" : "mobileSerp",
+    id: `${device}Serp`,
     enableSorting: false,
     header: () => (
       <span
@@ -239,7 +264,7 @@ function makeSerpColumn(
       </span>
     ),
     cell: ({ row }) => {
-      const features = row.original[device].serpFeatures;
+      const features = row.original[device]?.serpFeatures ?? [];
       if (features.length === 0) return null;
       return <SerpFeatureTags features={features} />;
     },
@@ -273,6 +298,12 @@ export function useRankTrackingColumns(options: {
       makeSelectionColumn<RankTrackingRow>(selectAnchorRef),
       makeKeywordColumn(onKeywordClick, onSetPinned),
     ];
+    if (!showDesktop && !showMobile) {
+      cols.push(
+        makeDeviceColumn("provider"),
+        makeUrlColumn("provider", domain),
+      );
+    }
     if (showDesktop) {
       cols.push(makeDeviceColumn("desktop"));
       cols.push(makeUrlColumn("desktop", domain));

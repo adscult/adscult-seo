@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { expect, it, vi } from "vitest";
 import { ProviderSettingsService } from "./provider-settings";
+import { tregAdapter } from "@/server/providers/treg/adapter";
 import { resolveProviderExecution } from "@/server/providers/resolver";
 import {
   withProviderScope,
@@ -27,9 +28,7 @@ const originalBasic = btoa("original:password");
 
 beforeAll(prepareDatabase);
 
-afterAll(async () => {
-  await client.close();
-});
+afterAll(() => client.close());
 beforeEach(async () => {
   await client.executeMultiple(
     "DELETE FROM seo_provider_tasks; DELETE FROM seo_provider_tests; DELETE FROM seo_provider_audit_events; DELETE FROM seo_provider_settings; DELETE FROM seo_provider_configurations;",
@@ -64,35 +63,36 @@ async function resetWriteLimit() {
   );
 }
 
-async function candidate(login = "replacement") {
+async function candidate(
+  login = "replacement",
+  provider: "dataforseo" | "treg" = "dataforseo",
+) {
   return ProviderSettingsService.saveCandidate(admin, {
-    provider: "dataforseo",
+    provider,
     credentials: {
       action: "replace",
-      bundle: { provider: "dataforseo", login, password: "new-password" },
+      bundle:
+        provider === "treg"
+          ? { provider, token: "test-token" }
+          : { provider, login, password: "new-password" },
     },
   });
 }
 
-async function readyCandidate(login?: string) {
-  const saved = await candidate(login);
+async function readyCandidate(
+  login?: string,
+  provider: "dataforseo" | "treg" = "dataforseo",
+) {
+  const saved = await candidate(login, provider);
+  if (provider === "treg")
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ org_id: 1, org: "test-team" }),
+    );
   await ProviderSettingsService.testCandidate(admin, saved.candidateId);
   await resetWriteLimit();
   return saved;
 }
 
-it("keeps native audit and Search Console cache keys usable without SEO credentials", async () => {
-  vi.stubEnv("DATAFORSEO_API_KEY", "");
-  const key = await withProviderScope(admin.organizationId, () =>
-    buildCacheKey(
-      "dashboard:first-audit",
-      { organizationId: admin.organizationId },
-      { seoProvider: false },
-    ),
-  );
-  expect(key).toMatch(/^dashboard:first-audit:/);
-  expect(fetch).not.toHaveBeenCalled();
-});
 it("retains a billed task's cost when configuration persistence fails and never replays its submission", async () => {
   vi.spyOn(ProviderRepository, "saveTasks").mockRejectedValueOnce(
     new Error("database unavailable"),
@@ -229,17 +229,21 @@ it("denies every settings operation to members and isolates candidates across or
   );
 });
 
-it("commits one audited revision and refuses a stale administrator", async () => {
-  const saved = await readyCandidate();
-  await ProviderSettingsService.activate(admin, saved.candidateId, 0);
-  await resetWriteLimit();
-  await expect(
-    ProviderSettingsService.activate(admin, saved.candidateId, 0),
-  ).rejects.toMatchObject({ code: "CONFLICT" });
-  expect(await ProviderSettingsService.read(admin)).toMatchObject({
-    revision: 1,
-  });
-});
+it.each(["dataforseo", "treg"] as const)(
+  "activates %s as one audited revision and refuses a stale administrator",
+  async (provider) => {
+    const saved = await readyCandidate(undefined, provider);
+    await ProviderSettingsService.activate(admin, saved.candidateId, 0);
+    await resetWriteLimit();
+    await expect(
+      ProviderSettingsService.activate(admin, saved.candidateId, 0),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(await ProviderSettingsService.read(admin)).toMatchObject({
+      revision: 1,
+      provider,
+    });
+  },
+);
 
 it("allows only one concurrent activation and writes only the winning audit event", async () => {
   const saved = await readyCandidate();
@@ -317,17 +321,17 @@ it("does not mark HTTP 200 with a failed vendor task as ready", async () => {
   ).rejects.toMatchObject({ code: "CONFLICT" });
 });
 
-it("keeps Treg SEO disabled after authentication", async () => {
+it("keeps unverified required operations disabled after authentication", async () => {
+  const capabilities = tregAdapter.capabilities();
+  vi.spyOn(tregAdapter, "capabilities").mockReturnValue(
+    capabilities.map((item) =>
+      item.operation === "serp.live" ? { ...item, state: "unverified" } : item,
+    ),
+  );
   vi.mocked(fetch).mockResolvedValueOnce(
     Response.json({ org_id: 1, org: "test-team" }),
   );
-  const saved = await ProviderSettingsService.saveCandidate(admin, {
-    provider: "treg",
-    credentials: {
-      action: "replace",
-      bundle: { provider: "treg", token: "test-token" },
-    },
-  });
+  const saved = await candidate(undefined, "treg");
   expect(
     await ProviderSettingsService.testCandidate(admin, saved.candidateId),
   ).toMatchObject({

@@ -70,7 +70,7 @@ export async function getKeywordHistory(
  */
 export async function getConfigTrend(
   configId: string,
-  device: "desktop" | "mobile",
+  device: "desktop" | "mobile" | "provider",
   sinceDays: number,
 ) {
   return db
@@ -111,7 +111,7 @@ export async function getConfigTrend(
  */
 export async function getPositionMatrix(
   configId: string,
-  device: "desktop" | "mobile",
+  device: "desktop" | "mobile" | "provider",
   runLimit: number,
 ) {
   const recentRunIds = db

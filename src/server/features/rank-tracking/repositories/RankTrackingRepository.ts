@@ -139,6 +139,7 @@ async function getDueConfigsWithOrganization(nowIso: string) {
         languageCode: rankTrackingConfigs.languageCode,
         locationName: rankTrackingConfigs.locationName,
         devices: rankTrackingConfigs.devices,
+        searchProvider: rankTrackingConfigs.searchProvider,
         serpDepth: rankTrackingConfigs.serpDepth,
         scheduleInterval: rankTrackingConfigs.scheduleInterval,
         nextCheckAt: rankTrackingConfigs.nextCheckAt,

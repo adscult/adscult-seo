@@ -1,3 +1,4 @@
+import { getScopedProviderExecution } from "@/server/providers/context";
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
 import type { rankTrackingKeywords } from "@/db/schema";
 import { AppError } from "@/server/lib/errors";
@@ -24,6 +25,10 @@ async function addKeywords(
   matchCase = false,
 ) {
   const config = await getValidatedConfig(configId, projectId);
+  const scheduledMethod =
+    (await getScopedProviderExecution())?.provider === "treg"
+      ? "live"
+      : "queued";
   const existing = await RankTrackingRepository.getKeywordsForConfig(configId);
 
   if (existing.length >= MAX_KEYWORDS_PER_CONFIG) {
@@ -71,6 +76,7 @@ async function addKeywords(
       config.devices,
       config.serpDepth,
       scheduleInterval,
+      scheduledMethod,
     );
     if (
       approval.kind === "credit_ceiling" &&
@@ -100,6 +106,7 @@ async function addKeywords(
       config.devices,
       config.serpDepth,
       scheduleInterval,
+      scheduledMethod,
     );
     if (
       approval.maxEstimatedScheduledCheckCredits == null ||
@@ -148,6 +155,10 @@ async function estimateCost(
   additionalKeywords: readonly string[] = [],
 ) {
   const config = await getValidatedConfig(configId, projectId);
+  const scheduledMethod =
+    (await getScopedProviderExecution())?.provider === "treg"
+      ? "live"
+      : "queued";
   const existing = await RankTrackingRepository.getKeywordsForConfig(configId);
   const existingKeywordCount = existing.length;
   const keywords = [
@@ -181,6 +192,7 @@ async function estimateCost(
           config.devices,
           config.serpDepth,
           scheduleInterval,
+          scheduledMethod,
         )
       : undefined,
   };

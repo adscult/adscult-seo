@@ -1,3 +1,4 @@
+import { withProviderExecution } from "@/server/providers/context";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_CONFIGS_PER_PROJECT } from "@/shared/rank-tracking";
 import { RankTrackingService } from "./RankTrackingService";
@@ -357,4 +358,57 @@ describe("RankTrackingService.triggerAutoCheck", () => {
     });
     expect(mocks.startWorkflow).not.toHaveBeenCalled();
   });
+});
+
+it.each([undefined, "dataforseo" as const])(
+  "defaults new Treg trackers to AnyAPI and retains an explicit source: %s",
+  async (searchProvider) => {
+    mocks.getConfigByProjectDomainLocation.mockResolvedValue(undefined);
+    mocks.getConfigsForProject.mockResolvedValue([]);
+    const result = await withProviderExecution(
+      {
+        organizationId: "org",
+        provider: "treg",
+        revision: 2,
+        credentialVersion: "saved",
+        source: "database",
+        authorization: "secret",
+      },
+      () =>
+        RankTrackingService.createConfig({
+          ...baseInput,
+          devices: undefined,
+          searchProvider,
+          scheduleInterval: "manual",
+        }),
+    );
+    expect(result).toMatchObject({
+      searchProvider: searchProvider ?? "anyapi",
+      devices: searchProvider ? "both" : "provider",
+    });
+  },
+);
+
+it("can archive an AnyAPI tracker after the active gateway changes to DataForSEO", async () => {
+  mocks.getConfigById.mockResolvedValue({
+    ...archivedConfig,
+    searchProvider: "anyapi",
+    devices: "provider",
+  });
+  await expect(
+    withProviderExecution(
+      {
+        organizationId: "org",
+        provider: "dataforseo",
+        revision: 3,
+        credentialVersion: "native",
+        source: "database",
+        authorization: "secret",
+      },
+      () =>
+        RankTrackingService.updateConfig("config_archived", "project_1", {
+          isActive: false,
+        }),
+    ),
+  ).resolves.toBeUndefined();
 });

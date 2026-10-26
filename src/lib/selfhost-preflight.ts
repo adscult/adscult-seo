@@ -1,4 +1,5 @@
 import { AUTH_MODES } from "@/lib/auth-mode";
+import { selfhostOwnerEmailsSchema } from "@/shared/selfhost-team";
 import {
   looksLikeDataForSeoKey,
   MIN_BETTER_AUTH_SECRET_LENGTH,
@@ -108,6 +109,20 @@ function checkAuthMode(env: EnvRecord, items: PreflightItem[]): void {
       name: "TEAM_DOMAIN",
       level: "fail",
       message: teamDomainResult.message,
+    });
+    return;
+  }
+
+  if (
+    !selfhostOwnerEmailsSchema.safeParse(get(env, "SELFHOST_OWNER_EMAILS"))
+      .success
+  ) {
+    items.push({
+      key: "auth",
+      name: "AUTH_MODE",
+      level: "fail",
+      message:
+        "Cloudflare Access requires SELFHOST_OWNER_EMAILS: a comma-separated list of owner email addresses. Other admitted users start as Members.",
     });
     return;
   }

@@ -1,5 +1,5 @@
 import { ProviderDetails, ProviderActiveStatus } from "./ProviderDetails";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SectionHeader } from "@/client/components/PageHeader";
 import { Button } from "@/client/components/ui/button";
@@ -31,6 +31,33 @@ export function SeoProviderSettings() {
   );
 }
 
+function useProviderCandidateChoice(organizationId: string) {
+  const draftKey = `seo-provider-candidate:${organizationId}`;
+  const [selectedProvider, setSelectedProvider] =
+    useState<SeoProviderId | null>(null);
+  useEffect(() => {
+    try {
+      const saved = window.sessionStorage.getItem(draftKey);
+      if (saved === "dataforseo" || saved === "treg")
+        setSelectedProvider(saved);
+    } catch {
+      // Editing still works when browser storage is unavailable.
+    }
+  }, [draftKey]);
+
+  function setProvider(next: SeoProviderId | null) {
+    setSelectedProvider(next);
+    try {
+      // Remember only the dropdown choice, never credentials or readiness.
+      if (next === null) window.sessionStorage.removeItem(draftKey);
+      else window.sessionStorage.setItem(draftKey, next);
+    } catch {
+      // Browser privacy settings may prevent draft persistence.
+    }
+  }
+  return [selectedProvider, setProvider] as const;
+}
+
 function ProviderEditor({ organizationId }: { organizationId: string }) {
   const queryClient = useQueryClient();
   const settings = useQuery({
@@ -38,7 +65,9 @@ function ProviderEditor({ organizationId }: { organizationId: string }) {
     queryFn: () => getProviderSettings(),
     staleTime: 0,
   });
-  const [provider, setProvider] = useState<SeoProviderId>("dataforseo");
+  const [selectedProvider, setProvider] =
+    useProviderCandidateChoice(organizationId);
+  const provider = selectedProvider ?? settings.data?.provider ?? "dataforseo";
   const [credentialAction, setCredentialAction] = useState<
     "unchanged" | "replace" | "environment"
   >("unchanged");
@@ -115,6 +144,7 @@ function ProviderEditor({ organizationId }: { organizationId: string }) {
         await queryClient.invalidateQueries({
           queryKey: ["seoApiKeyStatus"],
         });
+        setProvider(null);
       }
     },
   });
@@ -155,6 +185,11 @@ function ProviderEditor({ organizationId }: { organizationId: string }) {
             <legend className="mb-3 text-sm font-medium">
               Candidate configuration
             </legend>
+            <p className="text-sm text-muted-foreground">
+              Selecting or saving a candidate does not change the active
+              provider. Your selection is remembered in this tab. Test and
+              activate it to use it for new work.
+            </p>
             <div className="space-y-2">
               <Label htmlFor="seo-provider-choice">Provider</Label>
               <select
@@ -172,7 +207,7 @@ function ProviderEditor({ organizationId }: { organizationId: string }) {
                 }}
               >
                 <option value="dataforseo">DataForSEO</option>
-                <option value="treg">Treg (unverified)</option>
+                <option value="treg">Treg</option>
               </select>
             </div>
             <div className="space-y-2">
@@ -248,9 +283,9 @@ function ProviderEditor({ organizationId }: { organizationId: string }) {
               ))}
             {provider === "treg" && (
               <p className="text-sm">
-                Treg SEO operations have not passed integration verification.
-                Activation is unavailable. No vendor request is made when
-                testing this candidate.
+                SEO requests use your Treg balance. Connection testing is free.
+                Review candidate feature availability before activating;
+                unverified features remain unavailable.
               </p>
             )}
             <div className="flex flex-wrap gap-2">

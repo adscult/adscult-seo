@@ -6,6 +6,8 @@ import { createDataforseoClient } from "@/server/lib/dataforseo";
 import { fetchKeywordMetricsForList } from "@/server/lib/dataforseo/keyword-metrics";
 import { AppError } from "@/server/lib/errors";
 import { getScopedProviderExecution, withProviderScope } from "./context";
+import { getProviderAdapter } from "./registry";
+import { getKeywordDataProvider } from "@/shared/keyword-locations";
 import type {
   ProviderResult,
   KeywordMetricRow,
@@ -58,14 +60,30 @@ export function fetchKeywordMetrics(
       if (!execution) throw new AppError("SEO_PROVIDER_NOT_CONFIGURED");
       const meta = {
         provider: execution.provider,
-        upstreamVendor:
-          execution.provider === "dataforseo" ? "dataforseo" : "unverified",
+        upstreamVendor: "dataforseo",
         operation: "keywords.metrics",
         settingsRevision: execution.revision,
         fetchedAt: new Date().toISOString(),
         warnings: [] as string[],
       };
-      if (execution.provider !== "dataforseo") {
+      const usesAds =
+        getKeywordDataProvider(params.locationCode) === "google_ads";
+      const required = [
+        ...(!usesAds ? ["keywords.overview"] : []),
+        ...(usesAds || params.locationName ? ["keywords.adsVolume"] : []),
+      ];
+      const capabilities = getProviderAdapter(
+        execution.provider,
+      ).capabilities();
+      if (
+        !required.every((operation) =>
+          capabilities.some(
+            (capability) =>
+              capability.operation === operation &&
+              capability.state === "available",
+          ),
+        )
+      ) {
         return {
           ok: false,
           error: {

@@ -25,7 +25,7 @@ import {
 } from "@/types/schemas/rank-tracking";
 
 export interface RankKeywordHistoryPoint {
-  device: "desktop" | "mobile";
+  device: "desktop" | "mobile" | "provider";
   checkedAt: string;
   position: number | null;
 }
@@ -84,6 +84,7 @@ export const createRankTrackingConfig = createServerFn({ method: "POST" })
       languageCode: data.languageCode,
       locationName: data.locationName,
       devices: data.devices,
+      searchProvider: data.searchProvider,
       serpDepth: data.serpDepth,
       scheduleInterval: data.scheduleInterval,
       scheduleTime: data.scheduleTime,
@@ -124,6 +125,7 @@ export const updateRankTrackingConfig = createServerFn({ method: "POST" })
       languageCode: data.languageCode,
       locationName: data.locationName,
       devices: data.devices,
+      searchProvider: data.searchProvider,
       serpDepth: data.serpDepth,
       scheduleInterval: data.scheduleInterval,
       scheduleTime: data.scheduleTime,

@@ -1,0 +1,1 @@
+ALTER TABLE `rank_tracking_configs` ADD `search_provider` text DEFAULT 'dataforseo' NOT NULL;

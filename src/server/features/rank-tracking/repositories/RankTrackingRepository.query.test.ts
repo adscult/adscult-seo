@@ -42,6 +42,7 @@ beforeAll(async () => {
       archived_at TEXT
     );
     CREATE TABLE rank_tracking_configs (
+      search_provider TEXT NOT NULL DEFAULT 'dataforseo',
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL,
       domain TEXT NOT NULL,
@@ -370,4 +371,31 @@ describe("getConfigTrend", () => {
       { runId: "run_a", keywordsTotal: 2, total: 2 },
     ]);
   });
+});
+
+it("retains the tracker source choice when read and edited", async () => {
+  await RankTrackingRepository.createConfig({
+    id: "choice",
+    projectId: "project_1",
+    domain: "example.com",
+    devices: "provider",
+    searchProvider: "anyapi",
+    serpDepth: 40,
+  });
+  expect(
+    await RankTrackingRepository.getConfigById({
+      configId: "choice",
+      projectId: "project_1",
+    }),
+  ).toMatchObject({ searchProvider: "anyapi", devices: "provider" });
+  await RankTrackingRepository.updateConfig("choice", "project_1", {
+    searchProvider: "dataforseo",
+    devices: "mobile",
+  });
+  expect(
+    await RankTrackingRepository.getConfigById({
+      configId: "choice",
+      projectId: "project_1",
+    }),
+  ).toMatchObject({ searchProvider: "dataforseo", devices: "mobile" });
 });
