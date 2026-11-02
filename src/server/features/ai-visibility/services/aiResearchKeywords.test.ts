@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runBatch } from "@/db/runBatch";
 
 const {
   listCompetitors,
@@ -7,6 +8,7 @@ const {
   workflow,
   prepareWebsiteTracking,
   startWebsiteTrackingRun,
+  openRouterKey,
 } = vi.hoisted(() => ({
   listCompetitors: vi.fn(),
   listResearchKeywords: vi.fn(),
@@ -14,6 +16,7 @@ const {
   workflow: { get: vi.fn(), create: vi.fn() },
   prepareWebsiteTracking: vi.fn(),
   startWebsiteTrackingRun: vi.fn(),
+  openRouterKey: vi.fn(),
 }));
 
 vi.mock("cloudflare:workers", () => ({
@@ -21,11 +24,18 @@ vi.mock("cloudflare:workers", () => ({
 }));
 
 vi.mock("@/db/runBatch", () => ({ runBatch: vi.fn() }));
+vi.mock("../repositories/aiResearchKeywordSources", () => ({
+  listAiResearchKeywordSources: async () => ({
+    saved: ["saved term"],
+    tracked: ["tracked term"],
+  }),
+}));
 vi.mock("@/server/billing/subscription", () => ({
   checkUsageCreditsDepleted: vi.fn(),
 }));
 vi.mock("@/server/lib/runtime-env", () => ({
   isHostedServerAuthMode: async () => false,
+  getOptionalEnvValue: openRouterKey,
 }));
 vi.mock("../repositories/aiVisibilityConfigurationRepository", () => ({
   writeConfiguration: vi.fn(),
@@ -72,6 +82,10 @@ import {
 import { customer } from "./aiVisibilityTestFixtures";
 
 const topic = (name: string) => ({ name, prompts: [] });
+
+beforeEach(() => {
+  openRouterKey.mockResolvedValue("configured-test-key");
+});
 
 describe("runAiResearchSetup", () => {
   beforeEach(() => {
@@ -128,6 +142,26 @@ describe("runAiResearchSetup", () => {
 
 describe("getAiResearchSetup", () => {
   it.each([
+    [undefined, "keywords"],
+    ["openrouter", "openrouter"],
+  ])(
+    "uses deployment setup mode %s without modifying saved data",
+    async (mode, expected) => {
+      listResearchKeywords.mockResolvedValue(["existing keyword"]);
+      listCompetitors.mockResolvedValue([]);
+      openRouterKey.mockImplementation(async (name: string) =>
+        name === "AI_RESEARCH_SETUP_MODE" ? mode : undefined,
+      );
+      expect(await getAiResearchSetup("project")).toMatchObject({
+        defaultSetupMode: expected,
+        status: "ready",
+        keywords: ["existing keyword"],
+      });
+      expect(runBatch).not.toHaveBeenCalled();
+      expect(workflow.create).not.toHaveBeenCalled();
+    },
+  );
+  it.each([
     [
       "AppError: We couldn't read this website. Check the URL and try again.",
       "website_unreadable",
@@ -151,6 +185,56 @@ describe("getAiResearchSetup", () => {
 });
 
 describe("startAiResearchSetup", () => {
+  it("saves supplied keywords without OpenRouter, paid research, tracking or scheduling", async () => {
+    listResearchKeywords
+      .mockResolvedValueOnce([])
+      .mockResolvedValue(["Prada sunglasses"]);
+    listCompetitors.mockResolvedValue([{ domain: "competitor.example" }]);
+    workflow.get.mockRejectedValue(new Error("not found"));
+    openRouterKey.mockResolvedValue(undefined);
+
+    await expect(
+      startAiResearchSetup(
+        { projectId: "project", keywords: ["Prada sunglasses"] },
+        customer,
+        { runSeededTracking: true },
+      ),
+    ).resolves.toMatchObject({
+      status: "ready",
+      keywords: ["Prada sunglasses"],
+      failure: null,
+    });
+    expect(runBatch).toHaveBeenCalledOnce();
+    expect(workflow.create).not.toHaveBeenCalled();
+    expect(research).not.toHaveBeenCalled();
+    expect(prepareWebsiteTracking).not.toHaveBeenCalled();
+    expect(startWebsiteTrackingRun).not.toHaveBeenCalled();
+  });
+  it("reports missing OpenRouter configuration without creating a setup workflow", async () => {
+    listResearchKeywords.mockResolvedValue([]);
+    listCompetitors.mockResolvedValue([]);
+    workflow.get.mockRejectedValue(new Error("not found"));
+    openRouterKey.mockResolvedValue(undefined);
+
+    expect(await getAiResearchSetup("project")).toMatchObject({
+      status: "none",
+      failure: "openrouter_not_configured",
+    });
+    await expect(
+      startAiResearchSetup({ projectId: "project" }, customer),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(workflow.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps saved research available without an OpenRouter key", async () => {
+    listResearchKeywords.mockResolvedValue(["rank tracker"]);
+    listCompetitors.mockResolvedValue([]);
+    openRouterKey.mockResolvedValue(undefined);
+    expect(await getAiResearchSetup("project")).toMatchObject({
+      status: "ready",
+      failure: null,
+    });
+  });
   it("does not start a second paid run while one is running, such as after a reload", async () => {
     listResearchKeywords.mockResolvedValue([]);
     listCompetitors.mockResolvedValue([]);

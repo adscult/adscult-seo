@@ -37,6 +37,8 @@ const STANDARD_MESSAGES: Record<ErrorCode, string> = {
     "The connected DataForSEO account has a billing or balance issue.",
   AI_VISIBILITY_ERROR:
     "The AI visibility request could not be completed. Review the tracking settings and try again.",
+  AI_GENERATION_NOT_CONFIGURED:
+    "Prompt generation needs OpenRouter. Ask an administrator to configure OPENROUTER_API_KEY, or enter and save your prompts manually.",
   DATAFORSEO_AUTH_FAILED:
     "DataForSEO rejected the API key. Check that DATAFORSEO_API_KEY is the base64 of your DataForSEO login:password.",
   SEO_PROVIDER_NOT_CONFIGURED:

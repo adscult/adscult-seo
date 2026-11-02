@@ -9,6 +9,23 @@ export const aiEngineSchema = z.enum([
   "perplexity",
 ]);
 export const aiProjectSchema = z.object({ projectId: z.string().uuid() });
+export const aiResearchSetupSchema = aiProjectSchema.extend({
+  keywords: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(200)
+        .regex(/^[^\r\n]+$/),
+    )
+    .min(1)
+    .max(100)
+    .optional()
+    .describe(
+      "Use these exact keywords for free setup, reusing saved project context and competitors. Omit to use the existing paid OpenRouter setup. Saving keywords never starts answer collection.",
+    ),
+});
 const topicSchema = z.string().trim().min(1).max(100);
 const scheduleIntervalSchema = z
   .enum(["daily", "weekly", "monthly"])

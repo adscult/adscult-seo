@@ -171,8 +171,8 @@ export function TrackerEditor({
         {!adding && !review && schedule}
         {!state.providerConfigured && (
           <p className="rounded-lg bg-muted px-4 py-3 text-sm">
-            An administrator needs to configure the DataForSEO API key before we
-            can collect data.
+            AI answer collection is not configured for this deployment. You can
+            still save prompts; collecting answers needs a supported provider.
           </p>
         )}
         {review ? (

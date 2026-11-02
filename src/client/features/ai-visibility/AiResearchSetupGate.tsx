@@ -11,6 +11,9 @@ import { startAiResearchSetup } from "@/serverFunctions/ai-visibility";
 import { saveProjectWebsiteSetup } from "@/serverFunctions/projectWebsite";
 import type { SaveProjectWebsiteSetup } from "@/types/schemas/projectWebsite";
 import { SkeletonPageContent } from "@/client/components/SkeletonPresets";
+import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { getErrorCode } from "@/client/lib/error-messages";
+import { AiKeywordSetup } from "./AiKeywordSetup";
 import {
   AiQueryError,
   aiResearchKeywordsQueryOptions,
@@ -38,6 +41,10 @@ export function AiResearchSetupGate({
   const queryClient = useQueryClient();
   const setupOptions = aiResearchSetupQueryOptions(projectId);
   const setup = useQuery(setupOptions);
+  const [keywordText, setKeywordText] = useState("");
+  const [setupMode, setSetupMode] = useState<"keywords" | "openrouter" | null>(
+    null,
+  );
   const refresh = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: aiVisibilityKey(projectId) }),
@@ -49,7 +56,8 @@ export function AiResearchSetupGate({
       }),
     ]);
   const start = useMutation({
-    mutationFn: () => startAiResearchSetup({ data: { projectId } }),
+    mutationFn: (keywords?: string[]) =>
+      startAiResearchSetup({ data: { projectId, keywords } }),
     onSuccess: (data) => queryClient.setQueryData(setupOptions.queryKey, data),
   });
   // Setup writes the tracker, research keywords and a first run. Load what the
@@ -122,7 +130,11 @@ export function AiResearchSetupGate({
         />
       </div>
     );
-  if (status === "running" || start.isPending || finishing)
+  if (
+    status === "running" ||
+    (start.isPending && !start.variables) ||
+    finishing
+  )
     return (
       <div className="grid min-h-[calc(100dvh-8rem)] place-items-center">
         <WebsiteResearchProgress
@@ -132,7 +144,23 @@ export function AiResearchSetupGate({
         />
       </div>
     );
+  if ((setupMode ?? setup.data.defaultSetupMode) !== "openrouter")
+    return (
+      <AiKeywordSetup
+        text={keywordText}
+        onTextChange={setKeywordText}
+        sources={setup.data.keywordSources}
+        saving={start.isPending}
+        error={start.isError}
+        onSave={(keywords) => start.mutate(keywords)}
+        onOpenRouter={() => {
+          start.reset();
+          setSetupMode("openrouter");
+        }}
+      />
+    );
   const failed = status === "failed" || start.isError;
+  const missingOpenRouter = setup.data.failure === "openrouter_not_configured";
   const unreadable =
     !start.isError && setup.data.failure === "website_unreadable";
   return (
@@ -144,29 +172,56 @@ export function AiResearchSetupGate({
               <Sparkles className="size-5" />
             </div>
             <h1 className="text-2xl font-semibold tracking-tight">
-              Set up AI visibility
+              Research with OpenRouter
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               We’ll research your brand and find the most relevant topics to
               monitor.
             </p>
           </div>
-          {failed && (
+          {(failed || missingOpenRouter) && (
             <Alert variant="destructive">
               <AlertDescription>
-                {unreadable
-                  ? "We couldn’t read this website. Check the URL in project settings, then try again."
-                  : "We couldn’t finish setting up AI visibility. Check your available usage credits, then try again."}
+                {missingOpenRouter
+                  ? "AI visibility setup needs OpenRouter. Ask an administrator to configure an OpenRouter API key, then check configuration again."
+                  : unreadable
+                    ? "We couldn’t read this website. Check the URL in project settings, then try again."
+                    : start.isError &&
+                        getErrorCode(start.error) === "INSUFFICIENT_CREDITS"
+                      ? "You need available usage credits to set up AI visibility."
+                      : "We couldn’t finish setting up AI visibility. Ask an administrator to check the AI and SEO provider configuration, then try again."}
               </AlertDescription>
             </Alert>
           )}
           <div className="space-y-3">
-            <Button size="lg" className="w-full" onClick={() => start.mutate()}>
-              {failed ? "Try again" : "Start research"}
+            <Button
+              variant="link"
+              className="px-0"
+              onClick={() => {
+                start.reset();
+                setSetupMode("keywords");
+              }}
+            >
+              Use my keywords instead
+            </Button>
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={setup.isFetching}
+              onClick={() =>
+                missingOpenRouter ? void setup.refetch() : start.mutate()
+              }
+            >
+              {missingOpenRouter
+                ? "Check configuration"
+                : failed
+                  ? "Try again"
+                  : "Start research"}
             </Button>
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Research and a first run of your prompts use a small amount of
-              usage credits.
+              {isHostedClientAuthMode()
+                ? "Research and a first run of your prompts use usage credits."
+                : "Research and prompt checks can charge your configured AI and SEO providers."}
             </p>
           </div>
         </CardContent>

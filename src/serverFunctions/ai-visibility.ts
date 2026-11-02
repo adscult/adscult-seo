@@ -7,6 +7,7 @@ import { generateAiPromptsSchema } from "@/types/schemas/aiPromptSuggestions";
 import { researchAiPromptsSchema } from "@/types/schemas/aiPromptResearch";
 import {
   aiProjectSchema,
+  aiResearchSetupSchema,
   saveAiTrackerSchema,
   estimateAiCostSchema,
   setAiScheduleSchema,
@@ -48,10 +49,10 @@ export const getAiResearchSetup = createServerFn({ method: "POST" })
 
 export const startAiResearchSetup = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
-  .validator(aiProjectSchema)
-  .handler(({ context }) =>
+  .validator(aiResearchSetupSchema)
+  .handler(({ data, context }) =>
     AiVisibilityService.startResearchSetup(
-      { projectId: context.projectId },
+      { ...data, projectId: context.projectId },
       context,
       { runSeededTracking: true },
     ),

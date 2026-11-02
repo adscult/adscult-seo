@@ -108,6 +108,10 @@ export function TrackerPromptFields({
             {generate.isPending ? "Generating…" : "Generate"}
           </Button>
         </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Optional generation uses OpenRouter and can incur charges. Enter or
+          paste your own prompts to continue without generation.
+        </p>
         <div className="space-y-2">
           {group.prompts.map((text, index) => (
             <Input

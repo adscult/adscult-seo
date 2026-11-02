@@ -81,6 +81,23 @@ Access application applied to its hostname.
 Optional AI and Google credentials are forwarded by the Compose file. Enter
 them in Coolify only if those features are needed.
 
+## AI visibility setup and rollback
+
+New AI visibility setup defaults to using the user's own keywords. Import
+Saved Keywords or Rank Tracking terms, or enter them manually. Saving reuses
+Project context and competitors and makes no vendor requests, creates no
+tracker and enables no schedule. Research and answer collection still need
+a supported data provider and a separate paid action; Treg AI operations are
+not enabled by this setup choice.
+
+The existing OpenRouter setup remains available through **Research with
+OpenRouter instead**. To restore it as the deployment's default, set
+`AI_RESEARCH_SETUP_MODE=openrouter` in Coolify, configure `OPENROUTER_API_KEY`,
+and redeploy. Set the mode back to `keywords` to restore the keyword flow.
+This changes the initial setup screen; it does not overwrite saved keywords,
+context, competitors, prompts or historical results. No database rollback is
+needed. There is no automatic paid fallback if keyword saving fails.
+
 ## First deployment checks
 
 - Confirm container health and `/api/health` inside the container.

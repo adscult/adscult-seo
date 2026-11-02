@@ -12,7 +12,6 @@ import { requireOpenRouterCostUsd } from "@/server/lib/chatAgent";
 import { buildChatAgentModel } from "@/server/lib/openrouter";
 import {
   getOptionalEnvValue,
-  getRequiredEnvValue,
   isHostedServerAuthMode,
 } from "@/server/lib/runtime-env";
 import { AppError } from "@/server/lib/errors";
@@ -37,6 +36,8 @@ export async function generateAiPrompts(
       "VALIDATION_ERROR",
       "Set your project's website before generating prompts.",
     );
+  const apiKey = await getOptionalEnvValue("OPENROUTER_API_KEY");
+  if (!apiKey) throw new AppError("AI_GENERATION_NOT_CONFIGURED");
   const [config, sections, competitors] = await Promise.all([
     repo.getConfiguration(input.projectId),
     ProjectContextRepository.listSections(input.projectId),
@@ -74,7 +75,7 @@ export async function generateAiPrompts(
     : suggestedAiTopicSchema;
   const result = await generateText({
     model: buildChatAgentModel(
-      await getRequiredEnvValue("OPENROUTER_API_KEY"),
+      apiKey,
       await getOptionalEnvValue("OPENROUTER_MODEL"),
       "low",
     ),

@@ -12,6 +12,7 @@ import {
 import { researchAiPromptsSchema } from "@/types/schemas/aiPromptResearch";
 import {
   aiProjectSchema,
+  aiResearchSetupSchema,
   saveAiTrackerSchema,
   estimateAiCostSchema,
   setAiScheduleSchema,
@@ -158,7 +159,7 @@ export const generateAiVisibilityPromptsTool = defineAiTool({
 export const completeAiResearchSetupTool = defineAiTool({
   name: "complete_ai_research_setup",
   title: "Complete AI research setup",
-  input: aiProjectSchema,
+  input: aiResearchSetupSchema,
   output: z.looseObject({
     keywords: z.array(z.string()),
     status: z.enum(["ready", "running", "review", "failed", "none"]),
@@ -167,7 +168,7 @@ export const completeAiResearchSetupTool = defineAiTool({
   readOnly: false,
   path: "research",
   description:
-    "Give a project with a saved website its Prompt Research keywords. Get the user's approval first: unless keywords exist, this starts paid research with usage credits. Starting is idempotent: a running or reviewable setup is returned, not restarted. With a business overview and competitors in shared context, one model call writes the keywords and, when the project has no tracking yet, seeds three tracker topics with five prompts each, scheduled weekly with the first check about a week later. Missing overview and competitors are researched independently; saved values are reused. Status becomes review when basics or competitors were researched: review new competitors, or preserve the saved list when preserveCompetitors=true, then save with save_project_website_setup. While status is running, call again after about 20 seconds. Never starts answer collection.",
+    "Set up Prompt Research. Supply keywords to save the user's exact terms for free, reusing Project context and competitors, without creating tracking or a schedule. Omit keywords to use the existing paid OpenRouter setup; get the user's spending approval first. Existing keywords are preserved. A running or reviewable setup is returned, not restarted. OpenRouter researches missing context, generates keywords and seeds tracking only if none exists. Status review requires reviewing competitors and saving with save_project_website_setup. While running, poll after about 20 seconds. Never starts answer collection.",
   execute: (s, a, b) => s.startResearchSetup(a, b),
   summarize: (d) =>
     d.status === "ready"

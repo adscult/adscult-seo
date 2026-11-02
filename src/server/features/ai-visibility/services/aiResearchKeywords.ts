@@ -1,5 +1,7 @@
 import { env } from "cloudflare:workers";
 import { z } from "zod";
+import type { aiResearchSetupSchema } from "@/types/schemas/ai-visibility";
+import { listAiResearchKeywordSources } from "../repositories/aiResearchKeywordSources";
 import { runBatch } from "@/db/runBatch";
 import {
   checkUsageCreditsDepleted,
@@ -14,7 +16,10 @@ import {
   type WebsiteResearch,
 } from "@/types/schemas/projectWebsite";
 import { AppError } from "@/server/lib/errors";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import {
+  getOptionalEnvValue,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 import { AiVisibilityRepository as repo } from "../repositories/AiVisibilityRepository";
 import {
   writeConfiguration,
@@ -90,25 +95,53 @@ export async function getAiResearchSetup(projectId: string) {
   const run = keywords.length
     ? { status: "ready" as const }
     : await readSetupRun(projectId);
+  const missingOpenRouter =
+    (run.status === "none" || run.status === "failed") &&
+    !(await getOptionalEnvValue("OPENROUTER_API_KEY"));
   return {
     keywords,
+    defaultSetupMode:
+      (await getOptionalEnvValue("AI_RESEARCH_SETUP_MODE")) === "openrouter"
+        ? ("openrouter" as const)
+        : ("keywords" as const),
+    keywordSources: keywords.length
+      ? { saved: [], tracked: [] }
+      : await listAiResearchKeywordSources(projectId),
     ...missingContext(sections, competitors),
     status: run.status,
     review: "review" in run ? run.review : null,
-    failure: "failure" in run ? run.failure : null,
+    failure: missingOpenRouter
+      ? ("openrouter_not_configured" as const)
+      : "failure" in run
+        ? run.failure
+        : null,
   };
 }
 
 /** Starts the paid setup once; a running or reviewable run is left as is. */
 export async function startAiResearchSetup(
-  input: { projectId: string },
+  input: z.infer<typeof aiResearchSetupSchema>,
   customer: BillingCustomerContext,
   // In-app onboarding runs seeded tracking once. MCP setup never spends on
   // answers. A restarted setup keeps the flag it was first started with.
   { runSeededTracking = false } = {},
 ) {
+  // The same validated entry point serves the app and MCP. Manual setup
+  // writes keywords only: no model, answer run, tracker or schedule is created.
   const setup = await getAiResearchSetup(input.projectId);
   if (setup.status !== "none" && setup.status !== "failed") return setup;
+  if (input.keywords) {
+    const keywords = input.keywords;
+    await runBatch((tx) =>
+      writeResearchKeywords(tx, input.projectId, keywords),
+    );
+    return getAiResearchSetup(input.projectId);
+  }
+  if (setup.failure === "openrouter_not_configured")
+    throw new AppError(
+      "VALIDATION_ERROR",
+      "AI visibility setup requires an OpenRouter API key. Ask an administrator to configure OpenRouter.",
+    );
   // Any user with > 0 shared usage credits can start and complete this task.
   // Once admitted, never recheck or reserve credits during research: finish
   // all model calls and searches, then bill actual spend, allowing a negative balance.

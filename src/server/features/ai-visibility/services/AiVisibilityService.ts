@@ -14,6 +14,8 @@ import { loadAiTrend } from "./aiVisibilityTrend";
 import { listAiResearchKeywords, researchAiPrompts } from "./aiPromptResearch";
 import type { GenerateAiPromptsInput } from "@/types/schemas/aiPromptSuggestions";
 import type { BillingCustomerContext } from "@/server/billing/subscription";
+import type { z } from "zod";
+import type { aiResearchSetupSchema } from "@/types/schemas/ai-visibility";
 export const AiVisibilityService = {
   generatePrompts: async (
     input: GenerateAiPromptsInput,
@@ -23,7 +25,7 @@ export const AiVisibilityService = {
   getResearchSetup: async (input: { projectId: string }) =>
     (await import("./aiResearchKeywords")).getAiResearchSetup(input.projectId),
   startResearchSetup: async (
-    input: { projectId: string },
+    input: z.infer<typeof aiResearchSetupSchema>,
     billing: BillingCustomerContext,
     options?: { runSeededTracking?: boolean },
   ) =>
