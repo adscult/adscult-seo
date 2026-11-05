@@ -30,12 +30,76 @@ vi.mock("@/server/features/keywords/services/KeywordResearchService", () => ({
 
 const toolContext = makeToolContext();
 
+const row = (id: number) => ({
+  id: `saved-${id}`,
+  keyword: `term-${id}`,
+  searchVolume: 1000 - id,
+  keywordDifficulty: null,
+  cpc: null,
+  competition: null,
+  intent: null,
+  tags: [],
+});
+
 describe("saved keyword MCP tools", () => {
   beforeEach(() => {
     mocks.getProjectForOrganization.mockResolvedValue({
       id: "project_1",
       locationCode: 2840,
       languageCode: "en",
+    });
+    mocks.getSavedKeywords.mockResolvedValue({
+      rows: [],
+      totalCount: 0,
+      tags: [],
+    });
+  });
+
+  it("paginates a filtered saved segment with stable sorting and an exact final-page count", async () => {
+    mocks.getSavedKeywords
+      .mockResolvedValueOnce({
+        rows: Array.from({ length: 50 }, (_, i) => row(i + 50)),
+        totalCount: 125,
+        tags: [],
+      })
+      .mockResolvedValueOnce({
+        rows: Array.from({ length: 25 }, (_, i) => row(i + 100)),
+        totalCount: 125,
+        tags: [],
+      });
+    const args = {
+      projectId: "project_1",
+      search: "term",
+      tags: ["Opportunity"],
+      limit: 50 as const,
+      sort: "searchVolume" as const,
+      order: "desc" as const,
+    };
+    const second = await listSavedKeywordsTool.handler(
+      { ...args, page: 2 },
+      toolContext,
+    );
+    const last = await listSavedKeywordsTool.handler(
+      { ...args, page: 3 },
+      toolContext,
+    );
+    expect(second.structuredContent).toMatchObject({
+      totalCount: 125,
+      pageInfo: { page: 2, limit: 50, hasMore: true, nextPage: 3 },
+    });
+    expect(last.structuredContent).toMatchObject({
+      totalCount: 125,
+      pageInfo: { page: 3, hasMore: false, nextPage: null },
+    });
+    // Pagination and stable filters are the source-read contract.
+    expect(mocks.getSavedKeywords).toHaveBeenNthCalledWith(2, {
+      projectId: "project_1",
+      search: "term",
+      tagNames: ["Opportunity"],
+      page: 3,
+      pageSize: 50,
+      sort: "searchVolume",
+      order: "desc",
     });
   });
 

@@ -4,6 +4,13 @@ SAM can answer questions using the current project's Google Analytics 4, Google
 Search Console, saved keywords, and project context. Connect GA4 and Search Console
 through Integrations first. Other projects' data is outside the chat's scope.
 
+SAM uses small source pages and shows relevant rows first. Exact source counts,
+available totals, reporting dates, filters and limitations stay with each result.
+It can read more rows or revisit a saved result when a follow-up needs detail.
+Older tables are condensed in the model's context while the saved conversation
+keeps their detail and report links. For the connected-data profile, specialist
+tools load only when needed; the full profile keeps its existing tool catalog.
+
 For local development, add these settings to `.env.local`. For Docker or Coolify,
 set them in the deployment environment and rebuild/restart the container:
 

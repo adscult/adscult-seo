@@ -15,8 +15,12 @@ import type {
   TurnContext,
 } from "@cloudflare/think";
 import { clearChatTerminal } from "agents/chat";
-import { createCompactFunction } from "agents/experimental/memory/utils";
-import { generateText } from "ai";
+import {
+  createCompactFunction,
+  estimateMessageTokens,
+  estimateStringTokens,
+} from "agents/experimental/memory/utils";
+import { generateText, convertToModelMessages } from "ai";
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -39,6 +43,8 @@ import { buildSamModel } from "./samModel";
 import { SamUsageRepository } from "./SamUsageRepository";
 import { SamModelPreferenceService } from "./SamModelPreferenceService";
 import { SamModelCatalog } from "./SamModelCatalog";
+import { SamToolCatalog } from "./SamToolCatalog";
+import { buildSamHistoryTool, compactSamHistory } from "./samToolContext";
 import { samConfig } from "@/shared/sam-config";
 import {
   getEnvValueSync,
@@ -144,7 +150,8 @@ export class SamChatAgent extends Think {
   private samContext: SamContext | null = null;
   private selectedModel: string | undefined;
   private readonly modelCatalog = new SamModelCatalog();
-  private connectedToolNames = new Set<string>();
+  private connectedCatalog: SamToolCatalog | undefined;
+  private readonly turnToolResults = new Map<string, unknown>();
 
   // Per-turn billing state: beforeTurn arms it (non-null = hosted mode, meter
   // this turn), onStepFinish accumulates OpenRouter cost and meters it in
@@ -260,19 +267,48 @@ export class SamChatAgent extends Think {
   }
 
   override afterToolCall(ctx: ToolCallResultContext) {
+    if (this.samConfig.profile === "connected_data" && ctx.success)
+      this.turnToolResults.set(ctx.toolCallId, ctx.output);
     this.telemetry.toolCall(ctx);
   }
 
-  override beforeToolCall(ctx: ToolCallContext): ToolCallDecision | void {
+  override async beforeToolCall(
+    ctx: ToolCallContext,
+  ): Promise<ToolCallDecision | void> {
     if (
       this.samConfig.profile === "connected_data" &&
-      !this.connectedToolNames.has(ctx.toolName)
+      !this.connectedCatalog?.canExecute(ctx.toolName)
     ) {
       return {
         action: "block",
         reason: "This tool is not available in the connected-data profile.",
       };
     }
+    if (
+      this.samConfig.profile === "connected_data" &&
+      ["load_tools", "read_tool_result"].includes(ctx.toolName)
+    ) {
+      const role = await withPgClient(async () => {
+        const context = await this.loadSamContext();
+        return context
+          ? resolveSamToolRole({
+              userId: context.row.userId,
+              userEmail: context.userEmail,
+              organizationId: context.project.organizationId,
+            })
+          : null;
+      });
+      if (!role)
+        return {
+          action: "block",
+          reason: "You no longer have access to this conversation.",
+        };
+    }
+  }
+
+  override beforeStep() {
+    if (this.samConfig.profile === "connected_data")
+      return { activeTools: this.connectedCatalog?.activeTools ?? [] };
   }
 
   async configureSession(session: Session): Promise<Session> {
@@ -280,6 +316,9 @@ export class SamChatAgent extends Think {
       this.ctx.storage,
       await this.availableModels(),
     );
+    const compact = createCompactFunction({
+      summarize: (prompt) => this.summarizeForCompaction(prompt),
+    });
     return session
       .withContext("soul", {
         provider: { get: () => this.buildSoulPrompt() },
@@ -291,12 +330,24 @@ export class SamChatAgent extends Think {
             : "This project's shared memory — sections, competitors, key pages and research log. Change it with update_project_context.",
         provider: { get: () => this.renderProjectContext() },
       })
-      .onCompaction(
-        createCompactFunction({
-          summarize: (prompt) => this.summarizeForCompaction(prompt),
-        }),
+      .onCompaction((messages, context) =>
+        compact(
+          this.samConfig.profile === "connected_data"
+            ? compactSamHistory(messages)
+            : messages,
+          context,
+        ),
       )
-      .compactAfter(SAM_COMPACT_AFTER_TOKENS);
+      .compactAfter(
+        SAM_COMPACT_AFTER_TOKENS,
+        this.samConfig.profile === "connected_data"
+          ? {
+              tokenCounter: ({ messages, systemPrompt }) =>
+                estimateMessageTokens(compactSamHistory(messages)) +
+                estimateStringTokens(systemPrompt),
+            }
+          : undefined,
+      );
   }
 
   // Compaction summaries run outside the step loop (so outside onStepFinish),
@@ -304,7 +355,10 @@ export class SamChatAgent extends Think {
   private async summarizeForCompaction(prompt: string): Promise<string> {
     const result = await generateText({
       model: this.buildModel("low"),
-      prompt,
+      prompt:
+        this.samConfig.profile === "connected_data"
+          ? `Preserve the user's question, exact measured totals and findings, source properties, inclusive dates, filters, freshness/limitations, private report URLs, and contextPreview messageId/toolCallId references. Do not promote preview rows to population totals. Detail remains readable through read_tool_result.\n\n${prompt}`
+          : prompt,
       maxOutputTokens: 8_000,
     });
     this.recordSpend(openRouterCostUsd(result.providerMetadata));
@@ -385,6 +439,8 @@ export class SamChatAgent extends Think {
     // summary can land after the previous flush, and it is the same org's
     // spend either way.
     this.turnMonthlyRemaining = null;
+    this.turnToolResults.clear();
+    this.connectedCatalog = undefined;
     const turn = this.telemetry.beginTurn(turnCtx.continuation);
     turn.provider = this.samConfig.provider;
     return withPgClient(async (): Promise<TurnConfig> => {
@@ -458,9 +514,40 @@ export class SamChatAgent extends Think {
         turn.turnId,
         this.samConfig.profile,
       );
-      this.connectedToolNames = new Set(Object.keys(tools));
+      if (this.samConfig.profile === "connected_data") {
+        tools.read_tool_result = buildSamHistoryTool(async (reference) => {
+          if (this.turnToolResults.has(reference.toolCallId))
+            return this.turnToolResults.get(reference.toolCallId);
+          const message = reference.messageId
+            ? await this.session.getMessage(reference.messageId)
+            : this.messages.find((candidate) =>
+                candidate.parts.some(
+                  (part) =>
+                    "toolCallId" in part &&
+                    part.toolCallId === reference.toolCallId,
+                ),
+              );
+          const part = message?.parts.find(
+            (candidate) =>
+              "toolCallId" in candidate &&
+              candidate.toolCallId === reference.toolCallId &&
+              "output" in candidate,
+          );
+          return part && "output" in part ? part.output : undefined;
+        });
+        this.connectedCatalog = new SamToolCatalog(tools);
+      }
+      const turnTools = this.connectedCatalog?.tools ?? tools;
       return {
-        tools,
+        tools: turnTools,
+        // Use the original cached transcript, not Think's generic 500-character
+        // older-result truncation, so dates/totals/links survive our projection.
+        messages: this.connectedCatalog
+          ? await convertToModelMessages(compactSamHistory(this.messages), {
+              tools: turnTools,
+              ignoreIncompleteToolCalls: true,
+            })
+          : undefined,
         // Retain the project instructions/context, without Think's generic
         // workspace instructions for capabilities this profile doesn't expose.
         instructions:
@@ -471,7 +558,7 @@ export class SamChatAgent extends Think {
         // Only expose this profile's explicit read/report allowlist to the model.
         activeTools:
           this.samConfig.profile === "connected_data"
-            ? Object.keys(tools)
+            ? this.connectedCatalog?.activeTools
             : undefined,
         // Bound each response in addition to the shared daily token allowance.
         maxSteps: 12,

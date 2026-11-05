@@ -1,6 +1,6 @@
 import type { Tool, ToolSet } from "ai";
 import type { ZodRawShape } from "zod";
-import type { McpToolDefinition } from "./samChatTools";
+import type { McpToolDefinition } from "./samMcpTool";
 import { getProjectContextTool } from "@/server/mcp/tools/project-context";
 import {
   saveReportTool,

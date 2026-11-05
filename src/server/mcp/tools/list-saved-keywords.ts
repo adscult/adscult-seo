@@ -6,6 +6,7 @@ import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
 import { withMcpProjectAuth } from "@/server/mcp/project-auth";
 import { projectIdSchema } from "@/server/mcp/schemas";
 import type { SavedKeywordRow, SavedKeywordTagSummary } from "@/types/keywords";
+import { getSavedKeywordsSchema } from "@/types/schemas/keywords";
 
 // The app reads the full SavedKeywordRow through its own server functions. The
 // MCP row includes the saved row ID for removal, while omitting timestamps,
@@ -42,6 +43,21 @@ function toMcpTag(tag: SavedKeywordTagSummary) {
 
 const inputSchema = {
   projectId: projectIdSchema,
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe(
+      "Source page, starting at 1. Keep the same filters, sort, and limit when paginating.",
+    ),
+  sort: getSavedKeywordsSchema.shape.sort
+    .removeDefault()
+    .optional()
+    .describe(
+      "Sort by relevance to the question; default createdAt. Use searchVolume desc for highest-volume terms or keywordDifficulty asc for low-difficulty candidates.",
+    ),
+  order: z.enum(["asc", "desc"]).optional(),
   search: z
     .string()
     .min(1)
@@ -72,6 +88,14 @@ export const listSavedKeywordsTool = {
       tags: z.array(
         z.looseObject({ name: z.string(), keywordCount: z.number() }),
       ),
+      pageInfo: z
+        .object({
+          page: z.number(),
+          limit: z.number(),
+          hasMore: z.boolean(),
+          nextPage: z.number().nullable(),
+        })
+        .optional(),
       ...optionalMetaOutputSchema,
     }),
     annotations: {
@@ -87,10 +111,10 @@ export const listSavedKeywordsTool = {
           projectId: args.projectId,
           search: args.search,
           tagNames: args.tags,
-          page: 1,
+          page: args.page ?? 1,
           pageSize: args.limit ?? 100,
-          sort: "createdAt",
-          order: "desc",
+          sort: args.sort ?? "createdAt",
+          order: args.order ?? "desc",
         });
       const text =
         rows.length === 0
@@ -115,6 +139,18 @@ export const listSavedKeywordsTool = {
         structuredContent: {
           rows: rows.map(toMcpRow),
           totalCount,
+          pageInfo: {
+            page: args.page ?? 1,
+            limit: args.limit ?? 100,
+            hasMore:
+              ((args.page ?? 1) - 1) * (args.limit ?? 100) + rows.length <
+              totalCount,
+            nextPage:
+              ((args.page ?? 1) - 1) * (args.limit ?? 100) + rows.length <
+              totalCount
+                ? (args.page ?? 1) + 1
+                : null,
+          },
           tags: tags.map(toMcpTag),
         },
       });

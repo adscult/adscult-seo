@@ -2,6 +2,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { buildSamMcpTools } from "./samChatTools";
 import { makeToolContext } from "@/server/mcp/tools/tool-test-support";
 import { makeGa4ReportResult } from "@/server/features/ga4/services/ga4-test-fixtures";
+import { asSchema, type ToolSet } from "ai";
+import { SamToolCatalog } from "./SamToolCatalog";
+import { buildSamHistoryTool } from "./samToolContext";
 
 const mocks = vi.hoisted(() => ({
   role: vi.fn(),
@@ -70,6 +73,142 @@ const call = async (
   args: Record<string, unknown> = {},
 ): Promise<unknown> =>
   tools()[name].execute?.(args, { toolCallId: "call", messages: [] });
+
+it("uses bounded connected-data defaults while retaining the full profile's original defaults", async () => {
+  const connected = tools();
+  expect(
+    await asSchema(
+      connected.get_google_analytics_organic_landing_pages.inputSchema,
+    ).validate?.({}),
+  ).toMatchObject({ success: true, value: { limit: 20, offset: 0 } });
+  expect(
+    await asSchema(connected.list_saved_keywords.inputSchema).validate?.({}),
+  ).toMatchObject({
+    success: true,
+    value: { limit: 50, sort: "searchVolume" },
+  });
+  expect(
+    await asSchema(
+      connected.get_google_analytics_organic_overview.inputSchema,
+    ).validate?.({}),
+  ).toMatchObject({ success: true, value: { trend: "weekly" } });
+  const full = buildSamMcpTools(makeToolContext().auth, {
+    id: "project_1",
+    domain: "example.com",
+  });
+  expect(
+    await asSchema(
+      full.get_google_analytics_organic_landing_pages.inputSchema,
+    ).validate?.({}),
+  ).toMatchObject({ success: true, value: { limit: 100 } });
+  expect(
+    await asSchema(
+      full.get_google_analytics_organic_overview.inputSchema,
+    ).validate?.({}),
+  ).toMatchObject({ success: true, value: { trend: "daily" } });
+});
+
+it("reduces schema payloads for representative questions without hiding required specialists", async () => {
+  const definitions = tools();
+  const bytes = async (map: ToolSet, names: string[]) =>
+    JSON.stringify(
+      await Promise.all(
+        names.map(async (name) => ({
+          name,
+          description: map[name].description,
+          schema: await asSchema(map[name].inputSchema).jsonSchema,
+        })),
+      ),
+    ).length;
+  const allDefinitions = await bytes(definitions, Object.keys(definitions));
+  const cases = [
+    {
+      question: "Compare monthly Search Console clicks and impressions",
+      load: [],
+    },
+    {
+      question: "Which landing pages convert from organic traffic?",
+      load: ["get_google_analytics_organic_landing_pages"],
+    },
+    {
+      question: "Find opportunities in our saved keywords",
+      load: ["list_saved_keywords"],
+    },
+    {
+      question: "Compare sources and save a private report",
+      load: ["get_search_opportunities", "create_report"],
+    },
+  ];
+  const measurements = [];
+  for (const scenario of cases) {
+    const catalog = new SamToolCatalog({
+      ...definitions,
+      read_tool_result: buildSamHistoryTool(async () => undefined),
+    });
+    if (scenario.load.length)
+      await catalog.tools.load_tools.execute?.(
+        { names: scenario.load },
+        { toolCallId: "load", messages: [] },
+      );
+    for (const name of scenario.load)
+      expect(catalog.canExecute(name)).toBe(true);
+    const loadedDefinitions = await bytes(catalog.tools, catalog.activeTools);
+    expect(loadedDefinitions).toBeLessThan(allDefinitions);
+    measurements.push({
+      question: scenario.question,
+      allSchemaChars: allDefinitions,
+      loadedSchemaChars: loadedDefinitions,
+      activeTools: catalog.activeTools.length,
+    });
+  }
+  process.stdout.write(
+    `SAM schema benchmark (serialized characters, not billed tokens): ${JSON.stringify(measurements)}\n`,
+  );
+});
+
+it("keeps an entire bounded source page in storage while sending the model only its preview", async () => {
+  const rows = Array.from({ length: 50 }, (_, index) => ({
+    landingPage: `/page-${index}`,
+    sessions: index + 1,
+  }));
+  mocks.runReport.mockResolvedValue(
+    makeGa4ReportResult({
+      rows,
+      rowCount: 50,
+      totalRowCount: 125,
+      pageInfo: { limit: 50, hasMore: true, nextOffset: 50 },
+    }),
+  );
+  const definition = tools().get_google_analytics_organic_landing_pages;
+  const raw: unknown = await definition.execute?.(
+    { limit: 50, offset: 0 },
+    { toolCallId: "read", messages: [] },
+  );
+  expect(raw).toMatchObject({
+    data: { rows, totalRowCount: 125, pageInfo: { nextOffset: 50 } },
+  });
+  expect(
+    await definition.toModelOutput?.({
+      output: raw,
+      toolCallId: "read",
+      input: {},
+    }),
+  ).toMatchObject({
+    type: "json",
+    value: {
+      result: {
+        data: {
+          rows: rows.slice(0, 20),
+          totalRowCount: 125,
+          pageInfo: { nextOffset: 50 },
+        },
+      },
+      contextPreview: {
+        omitted: [{ path: "data.rows", shown: 20, available: 50 }],
+      },
+    },
+  });
+});
 
 beforeEach(() => {
   mocks.role.mockResolvedValue("member");

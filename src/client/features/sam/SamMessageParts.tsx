@@ -52,9 +52,14 @@ export const SamToolCall: ToolCallMessagePartComponent = ({
   status,
 }) => {
   const running = status.type === "running";
-  const label = toolName
-    .replace(/_/g, " ")
-    .replace(/^./, (letter) => letter.toUpperCase());
+  const label =
+    (
+      {
+        load_tools: "Preparing analysis",
+        read_tool_result: "Reviewing saved data",
+      } as Record<string, string>
+    )[toolName] ??
+    toolName.replace(/_/g, " ").replace(/^./, (letter) => letter.toUpperCase());
   return (
     <details className="group/tool my-2 rounded-lg border border-border text-xs">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg px-3 py-2.5 outline-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring">
