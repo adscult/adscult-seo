@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- SAM's lifecycle hooks share Durable Object state. */
 import { Think } from "@cloudflare/think";
 import type {
   ChatErrorContext,
@@ -8,6 +9,8 @@ import type {
   Session,
   StepContext,
   ToolCallResultContext,
+  ToolCallContext,
+  ToolCallDecision,
   TurnConfig,
   TurnContext,
 } from "@cloudflare/think";
@@ -32,7 +35,11 @@ import {
   SamTelemetry,
   type SamTurnStats,
 } from "@/server/features/sam/samTurnTelemetry";
-import { buildChatAgentModel } from "@/server/lib/openrouter";
+import { buildSamModel } from "./samModel";
+import { SamUsageRepository } from "./SamUsageRepository";
+import { SamModelPreferenceService } from "./SamModelPreferenceService";
+import { SamModelCatalog } from "./SamModelCatalog";
+import { samConfig } from "@/shared/sam-config";
 import {
   getEnvValueSync,
   isHostedServerAuthMode,
@@ -45,6 +52,7 @@ import {
 import { getPublicOrigin } from "@/server/mcp/public-origin";
 import { MCP_SCOPE } from "@/lib/oauth-resource";
 import type { ToolAuthContext } from "@/server/mcp/context";
+import { AppError } from "@/server/lib/errors";
 
 // SAM's read-only view of the project's shared memory. The block has no `set`
 // provider, so Think exposes no set_context tool for it; writes go through the
@@ -134,6 +142,9 @@ export class SamChatAgent extends Think {
   // immutable). Null until a turn/provider needs it — and left null when the
   // registry row is gone, which beforeTurn turns into a polite refusal.
   private samContext: SamContext | null = null;
+  private selectedModel: string | undefined;
+  private readonly modelCatalog = new SamModelCatalog();
+  private connectedToolNames = new Set<string>();
 
   // Per-turn billing state: beforeTurn arms it (non-null = hosted mode, meter
   // this turn), onStepFinish accumulates OpenRouter cost and meters it in
@@ -167,13 +178,17 @@ export class SamChatAgent extends Think {
     proactive: { maxInputTokens: SAM_MAX_INPUT_TOKENS },
   };
 
-  /** Permanently remove this session's transcript for an account erasure. */
+  /** Permanently erase a conversation, also used during account erasure. */
   async destroyForErasure(): Promise<void> {
     for (const socket of this.ctx.getWebSockets()) {
-      socket.close(1000, "Account erased");
+      socket.close(1000, "Conversation deleted");
     }
     this.cancelAllChats();
-    await this.waitUntilStable({ timeout: 5000 });
+    if (!(await this.waitUntilStable({ timeout: 5000 }))) {
+      throw new Error(
+        "SAM is still stopping this conversation. Try deleting it again.",
+      );
+    }
     await this.ctx.storage.deleteAlarm();
     await this.ctx.storage.deleteAll();
   }
@@ -194,18 +209,53 @@ export class SamChatAgent extends Think {
   }
 
   private buildModel(reasoningEffort: "max" | "low") {
-    const apiKey = getEnvValueSync(this.env, "OPENROUTER_API_KEY");
-    if (!apiKey) {
-      throw new Error("OPENROUTER_API_KEY is required for the SAM agent");
-    }
-    return buildChatAgentModel(
-      apiKey,
-      getEnvValueSync(this.env, "OPENROUTER_MODEL"),
+    return buildSamModel(
+      this.env,
       reasoningEffort,
+      (provider, model) =>
+        withPgClient(async () => {
+          const ctx = await this.loadSamContext();
+          if (
+            !ctx ||
+            !(await resolveSamToolRole({
+              userId: ctx.row.userId,
+              userEmail: ctx.userEmail,
+              organizationId: ctx.project.organizationId,
+            }))
+          ) {
+            throw new Error(
+              "You no longer have access to this chat. Start a new chat if you have changed workspaces.",
+            );
+          }
+          return SamUsageRepository.admit({
+            organizationId: ctx.project.organizationId,
+            sessionId: ctx.row.id,
+            provider,
+            model,
+            purpose: reasoningEffort === "low" ? "summary" : "response",
+          });
+        }),
+      this.selectedModel,
     );
   }
 
+  private get samConfig() {
+    return samConfig((name) => getEnvValueSync(this.env, name));
+  }
+
+  private async availableModels() {
+    const config = this.samConfig;
+    return {
+      ...config,
+      ...(await this.modelCatalog.get(
+        config,
+        getEnvValueSync(this.env, config.keyName),
+      )),
+    };
+  }
+
   override getSkills() {
+    if (this.samConfig.profile === "connected_data") return [];
     return [buildSamSkillSource()];
   }
 
@@ -213,14 +263,32 @@ export class SamChatAgent extends Think {
     this.telemetry.toolCall(ctx);
   }
 
-  configureSession(session: Session): Session {
+  override beforeToolCall(ctx: ToolCallContext): ToolCallDecision | void {
+    if (
+      this.samConfig.profile === "connected_data" &&
+      !this.connectedToolNames.has(ctx.toolName)
+    ) {
+      return {
+        action: "block",
+        reason: "This tool is not available in the connected-data profile.",
+      };
+    }
+  }
+
+  async configureSession(session: Session): Promise<Session> {
+    this.selectedModel = await SamModelPreferenceService.get(
+      this.ctx.storage,
+      await this.availableModels(),
+    );
     return session
       .withContext("soul", {
         provider: { get: () => this.buildSoulPrompt() },
       })
       .withContext(PROJECT_CONTEXT_BLOCK, {
         description:
-          "This project's shared memory — sections, competitors, key pages and research log, the same records the user sees in the app. Change it with update_project_context.",
+          this.samConfig.profile === "connected_data"
+            ? "Existing project context: sections, competitors, key pages and research log. Read-only in this profile."
+            : "This project's shared memory — sections, competitors, key pages and research log. Change it with update_project_context.",
         provider: { get: () => this.renderProjectContext() },
       })
       .onCompaction(
@@ -237,6 +305,7 @@ export class SamChatAgent extends Think {
     const result = await generateText({
       model: this.buildModel("low"),
       prompt,
+      maxOutputTokens: 8_000,
     });
     this.recordSpend(openRouterCostUsd(result.providerMetadata));
     this.telemetry.compaction();
@@ -280,7 +349,10 @@ export class SamChatAgent extends Think {
           languageCode: ctx.project.languageCode,
         },
         // Nothing recorded about the business yet: SAM runs its intake flow.
-        { intakeMode: context.missingSections.includes("business_overview") },
+        {
+          intakeMode: context.missingSections.includes("business_overview"),
+          profile: this.samConfig.profile,
+        },
       );
     });
   }
@@ -314,6 +386,7 @@ export class SamChatAgent extends Think {
     // spend either way.
     this.turnMonthlyRemaining = null;
     const turn = this.telemetry.beginTurn(turnCtx.continuation);
+    turn.provider = this.samConfig.provider;
     return withPgClient(async (): Promise<TurnConfig> => {
       const ctx = await this.loadSamContext();
       if (!ctx) {
@@ -379,18 +452,30 @@ export class SamChatAgent extends Think {
 
       // Loaded per turn, not at startup: the tool schemas are costly to build.
       const samTools = await import("@/server/features/sam/samChatTools");
+      const tools = samTools.buildSamMcpTools(
+        authContext,
+        ctx.project,
+        turn.turnId,
+        this.samConfig.profile,
+      );
+      this.connectedToolNames = new Set(Object.keys(tools));
       return {
-        tools: samTools.buildSamMcpTools(authContext, ctx.project, turn.turnId),
-        // SAM runs complex multi-step work in one turn (site-read intake plus
-        // a full research chain, multi-competitor sweeps), so the step budget
-        // is generous; cost is bounded by per-step metering and the model
-        // stopping on its own. The per-step token budget is shared by
-        // max-effort reasoning and the visible reply, so it stays well above
-        // measured reasoning use (~3k tokens — a tight cap lets reasoning eat
-        // the reply, issue #161) but below the 32k that, with 48 steps, let a
-        // single turn outgrow the Durable Object memory limit.
-        maxSteps: 40,
-        maxOutputTokens: 16_000,
+        tools,
+        // Retain the project instructions/context, without Think's generic
+        // workspace instructions for capabilities this profile doesn't expose.
+        instructions:
+          this.samConfig.profile === "connected_data"
+            ? await this.session.freezeSystemPrompt()
+            : undefined,
+        // Think merges framework workspace/context tools into config.tools.
+        // Only expose this profile's explicit read/report allowlist to the model.
+        activeTools:
+          this.samConfig.profile === "connected_data"
+            ? Object.keys(tools)
+            : undefined,
+        // Bound each response in addition to the shared daily token allowance.
+        maxSteps: 12,
+        maxOutputTokens: 8_000,
       };
     });
   }
@@ -442,7 +527,7 @@ export class SamChatAgent extends Think {
       creditFeature: "agent",
       costUsd,
       monthlyRemaining: this.turnMonthlyRemaining ?? armedMonthlyRemaining,
-      properties: { provider: "openrouter", turn_id: turn?.turnId },
+      properties: { provider: this.samConfig.provider, turn_id: turn?.turnId },
     });
     if (turn) turn.credits += monthlyCredits + topupCredits;
     if (this.turnMonthlyRemaining !== null)
@@ -573,6 +658,69 @@ export class SamChatAgent extends Think {
   // every other HTTP request to this DO. Think's own onRequest wrapper handles
   // /get-messages before delegating here.
   async onRequest(request: Request): Promise<Response> {
+    if (new URL(request.url).pathname.endsWith("/model")) {
+      if (request.method !== "GET" && request.method !== "POST") {
+        return new Response("Method not allowed", {
+          status: 405,
+          headers: { Allow: "GET, POST" },
+        });
+      }
+      let config: Awaited<ReturnType<SamChatAgent["availableModels"]>>;
+      try {
+        config = await this.availableModels();
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error && !(error instanceof z.ZodError)
+                ? error.message
+                : "Could not load models from SAM's provider. Try again shortly.",
+          },
+          { status: 503 },
+        );
+      }
+      if (request.method === "POST") {
+        if (!(await this.waitUntilStable({ timeout: 1 }))) {
+          return Response.json(
+            { error: "Wait for SAM's reply to finish before changing models." },
+            { status: 409 },
+          );
+        }
+        try {
+          this.selectedModel = await SamModelPreferenceService.set(
+            this.ctx.storage,
+            config,
+            await request.json().catch(() => null),
+          );
+        } catch (error) {
+          if (
+            !(error instanceof AppError) ||
+            error.code !== "VALIDATION_ERROR"
+          ) {
+            console.error("[sam] model preference save failed", error);
+            return Response.json(
+              { error: "Could not save the model selection. Try again." },
+              { status: 500 },
+            );
+          }
+          return Response.json(
+            { error: "Choose one of the available SAM models." },
+            { status: 400 },
+          );
+        }
+      } else {
+        this.selectedModel = await SamModelPreferenceService.get(
+          this.ctx.storage,
+          config,
+        );
+      }
+      return Response.json({
+        model: this.selectedModel,
+        models: config.models,
+        labels: config.labels,
+        groups: config.groups,
+      });
+    }
     if (
       request.method === "POST" &&
       new URL(request.url).pathname.endsWith("/rewind")

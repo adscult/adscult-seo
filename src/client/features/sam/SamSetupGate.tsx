@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { ShieldAlert, Wrench } from "lucide-react";
 import { GateCard } from "@/client/components/GateCard";
 import { Alert, AlertDescription } from "@/client/components/ui/alert";
@@ -8,11 +7,20 @@ export function SamSetupGate({
   errorMessage,
   isRefetching,
   onRetry,
+  provider,
 }: {
   errorMessage: string | null;
   isRefetching: boolean;
   onRetry: () => void;
+  provider: "openrouter" | "anthropic";
 }) {
+  const name = provider === "anthropic" ? "Anthropic" : "OpenRouter";
+  const keyName =
+    provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENROUTER_API_KEY";
+  const keyUrl =
+    provider === "anthropic"
+      ? "https://console.anthropic.com/settings/keys"
+      : "https://openrouter.ai/settings/keys";
   return (
     <GateCard
       icon={Wrench}
@@ -21,20 +29,12 @@ export function SamSetupGate({
       description={
         <>
           <p>
-            SAM, OpenSEO&apos;s in-app AI agent, needs an OpenRouter API key.
-            Create a key on OpenRouter, set it as the{" "}
-            <code>OPENROUTER_API_KEY</code> environment variable, restart
-            OpenSEO, then confirm here.
+            SAM needs a {name} API key. Create a key on {name}, set it as the{" "}
+            <code>{keyName}</code> environment variable, restart OpenSEO, then
+            confirm here.
           </p>
           <p className="text-xs">
-            Step-by-step instructions for every deployment are in the{" "}
-            <Link
-              className="underline underline-offset-2 hover:text-foreground"
-              to="/help/openrouter-api-key"
-            >
-              OpenRouter API key setup guide
-            </Link>
-            .
+            The selected provider is {name}. Set SAM_PROVIDER to change it.
           </p>
         </>
       }
@@ -47,15 +47,9 @@ export function SamSetupGate({
             size="lg"
             variant="outline"
             nativeButton={false}
-            render={
-              <a
-                href="https://openrouter.ai/settings/keys"
-                target="_blank"
-                rel="noreferrer"
-              />
-            }
+            render={<a href={keyUrl} target="_blank" rel="noreferrer" />}
           >
-            Open OpenRouter Keys
+            Open {name} Keys
           </Button>
         </>
       }

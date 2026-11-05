@@ -121,6 +121,8 @@ export const {
   auditIssues,
   auditLighthouseResults,
   samSessions,
+  samUsageDays,
+  samModelCalls,
   user,
   session,
   account,

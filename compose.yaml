@@ -30,6 +30,11 @@ services:
       # Optional: AI features (SAM, the in-app SEO agent)
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      - SAM_PROVIDER=${SAM_PROVIDER:-openrouter}
+      - SAM_TOOL_PROFILE=${SAM_TOOL_PROFILE:-full}
+      - SAM_MODELS=${SAM_MODELS:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-latest-sonnet}
       - VITE_SHOW_DEVTOOLS=false
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"

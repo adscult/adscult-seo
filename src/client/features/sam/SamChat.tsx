@@ -117,12 +117,12 @@ export function SamChat({
     );
   }
 
-  // SAM cannot answer a turn without OPENROUTER_API_KEY, so surface setup
-  // instructions instead of letting a chat fail mid-stream (self-hosted only).
+  // Surface setup instructions when the selected provider's key is missing.
   if (access.status === "setup") {
     return (
       <StatusScreen size="lg">
         <SamSetupGate
+          provider={access.provider}
           errorMessage={access.errorMessage}
           isRefetching={access.isRefetching}
           onRetry={access.onRetry}
@@ -184,20 +184,57 @@ export function SamChat({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* Session title + the shortest path to inspect or correct the shared
-          memory SAM reads and writes during the conversation. */}
-      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
-        <span className="truncate text-sm font-medium text-foreground/80">
-          {activeSession.title}
-        </span>
-        <Link
-          to="/p/$projectId/context"
-          params={{ projectId }}
-          className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+      <div className="shrink-0 border-b border-border bg-card px-4 py-4 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold">SAM</h1>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {activeSession.title === "New chat"
+                ? "Your project assistant"
+                : activeSession.title}
+            </p>
+          </div>
+          <Link
+            to="/p/$projectId/context"
+            params={{ projectId }}
+            className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <Brain className="size-3.5" />
+            Project context
+          </Link>
+        </div>
+        <div
+          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+          role="status"
         >
-          <Brain className="size-3.5" />
-          Project memory
-        </Link>
+          <span>
+            {access.details.provider === "anthropic"
+              ? "Anthropic"
+              : "OpenRouter"}
+          </span>
+          {access.details.usage && (
+            <>
+              <span className="tabular-nums">
+                Team: {access.details.usage.tokens.toLocaleString()} /{" "}
+                {access.details.usage.allowance.toLocaleString()} tokens
+              </span>
+              <span>
+                Resets{" "}
+                {new Date(access.details.usage.resetAt).toLocaleString(
+                  "en-IN",
+                  {
+                    timeZone: "Asia/Kolkata",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    day: "numeric",
+                    month: "short",
+                  },
+                )}{" "}
+                (Asia/Kolkata)
+              </span>
+            </>
+          )}
+        </div>
       </div>
       <div className="flex min-h-0 flex-1">
         {/* useAgentChat suspends while it fetches the session's history; this

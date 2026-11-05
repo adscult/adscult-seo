@@ -1,7 +1,52 @@
-import { sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  index,
+  integer,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
-import { user } from "./better-auth-schema";
+import { user, organization } from "./better-auth-schema";
 import { projects } from "./app.schema";
+
+export const samUsageDays = sqliteTable(
+  "sam_usage_days",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+  },
+  (table) => [
+    uniqueIndex("sam_usage_days_org_date_uidx").on(
+      table.organizationId,
+      table.date,
+    ),
+  ],
+);
+
+export const samModelCalls = sqliteTable(
+  "sam_model_calls",
+  {
+    id: text("id").primaryKey(),
+    usageDayId: text("usage_day_id")
+      .notNull()
+      .references(() => samUsageDays.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => samSessions.id, {
+      onDelete: "set null",
+    }),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    purpose: text("purpose").notNull(),
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [index("sam_model_calls_day_idx").on(table.usageDayId)],
+);
 
 // One row per SAM chat session. The conversation history itself lives in the
 // SamChatAgent Durable Object's SQLite (keyed by this id); this table is the

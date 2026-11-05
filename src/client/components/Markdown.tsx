@@ -1,16 +1,8 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { safeHttpUrl } from "@/shared/safe-url";
 
-type Props = {
-  /** Raw Markdown source to render. */
-  children: string;
-  className?: string;
-};
-
 /**
- * Shared Markdown renderer with explicit per-element Tailwind classes.
+ * Shared Markdown elements for assistant-ui and the answer readers.
  *
  * OpenSEO doesn't ship `@tailwindcss/typography`, so `prose` classes are
  * no-ops — every block element is styled here instead.
@@ -18,19 +10,6 @@ type Props = {
  * Anchor URLs are sanitized to http(s) only — LLMs can be coaxed into
  * emitting `javascript:` payloads.
  */
-export function Markdown({ children, className }: Props) {
-  return (
-    <div className={className}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={MARKDOWN_COMPONENTS}
-      >
-        {children}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
 type AnchorProps = ComponentPropsWithoutRef<"a">;
 
 function SafeAnchor({ href, children, ...rest }: AnchorProps) {

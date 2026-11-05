@@ -42,6 +42,11 @@ describe("search console MCP tools", () => {
       languageCode: "en",
     });
     mocks.hasGoogleOAuthConfig.mockResolvedValue(true);
+    mocks.GscService.getPerformance.mockResolvedValue({
+      siteUrl: "https://example.com/",
+      request: { startDate: "2026-08-01", endDate: "2026-09-30" },
+      rows: [],
+    });
   });
 
   it("returns performance rows on success and passes filters through", async () => {

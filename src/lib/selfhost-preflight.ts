@@ -1,4 +1,5 @@
 import { AUTH_MODES } from "@/lib/auth-mode";
+import { samConfig } from "@/shared/sam-config";
 import { selfhostOwnerEmailsSchema } from "@/shared/selfhost-team";
 import {
   looksLikeDataForSeoKey,
@@ -210,22 +211,32 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
     });
   }
 
-  items.push(
-    get(env, "OPENROUTER_API_KEY")
-      ? {
-          key: "ai",
-          name: "AI features",
-          level: "ok",
-          message: "OPENROUTER_API_KEY set",
-        }
-      : {
-          key: "ai",
-          name: "AI features",
-          level: "info",
-          message:
-            "OPENROUTER_API_KEY not set (optional) — SAM, the in-app SEO agent, is disabled.",
-        },
-  );
+  try {
+    const config = samConfig((name) => get(env, name));
+    items.push(
+      get(env, config.keyName)
+        ? {
+            key: "ai",
+            name: "AI features",
+            level: "ok",
+            message: `SAM: ${config.provider} / ${config.model} (${config.profile}); ${config.keyName} set`,
+          }
+        : {
+            key: "ai",
+            name: "AI features",
+            level: "info",
+            message: `${config.keyName} not set (optional) — SAM is disabled (${config.provider} / ${config.model}).`,
+          },
+    );
+  } catch (error) {
+    items.push({
+      key: "ai",
+      name: "SAM",
+      level: "fail",
+      message:
+        error instanceof Error ? error.message : "Invalid SAM configuration",
+    });
+  }
 
   items.push(
     get(env, "CONTEXT_API_KEY")

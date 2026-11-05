@@ -1,35 +1,47 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import {
-  getOptionalEnvValue,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { getOptionalEnvValue } from "@/server/lib/runtime-env";
 import { requireProjectContext } from "@/serverFunctions/middleware";
-
-const OPENROUTER_KEY_MISSING_MESSAGE =
-  "OPENROUTER_API_KEY is not set for this deployment yet. Add it to your environment, restart OpenSEO, then confirm here.";
+import { samConfig } from "@/shared/sam-config";
+import { SamUsageRepository } from "@/server/features/sam/SamUsageRepository";
 
 const projectScopedSchema = z.object({ projectId: z.string().min(1) });
 
 type SamAccessStatus = {
   enabled: boolean;
   errorMessage: string | null;
+  provider: "openrouter" | "anthropic";
+  model: string;
+  keyName: string;
+  usage: Awaited<ReturnType<typeof SamUsageRepository.status>> | null;
 };
 
-// Gates the in-app AI agent (SAM) on an OpenRouter key being configured, the
-// same way backlinks/AI-search gate on their DataForSEO subscriptions. Hosted
-// deployments always have the key provisioned, so only self-hosted is checked.
+// Check only the selected provider's key. Never return credentials to the client.
 export const getSamAccessSetupStatus = createServerFn({ method: "GET" })
   .middleware(requireProjectContext)
   .validator(projectScopedSchema)
-  .handler(async (): Promise<SamAccessStatus> => {
-    if (await isHostedServerAuthMode()) {
-      return { enabled: true, errorMessage: null };
-    }
-
-    const enabled = Boolean(await getOptionalEnvValue("OPENROUTER_API_KEY"));
+  .handler(async ({ context }): Promise<SamAccessStatus> => {
+    const settings = Object.fromEntries(
+      await Promise.all(
+        [
+          "SAM_PROVIDER",
+          "SAM_TOOL_PROFILE",
+          "SAM_MODELS",
+          "OPENROUTER_MODEL",
+          "ANTHROPIC_MODEL",
+        ].map(async (name) => [name, await getOptionalEnvValue(name)] as const),
+      ),
+    );
+    const config = samConfig((name) => settings[name]);
+    const enabled = Boolean(await getOptionalEnvValue(config.keyName));
     return {
+      ...config,
       enabled,
-      errorMessage: enabled ? null : OPENROUTER_KEY_MISSING_MESSAGE,
+      errorMessage: enabled
+        ? null
+        : `${config.keyName} is not set. Add it to your environment, restart OpenSEO, then confirm here.`,
+      usage: enabled
+        ? await SamUsageRepository.status(context.organizationId)
+        : null,
     };
   });

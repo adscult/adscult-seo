@@ -8,7 +8,7 @@ import {
 import { AppError } from "@/server/lib/errors";
 import { captureServerEvent } from "@/server/lib/posthog";
 import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository";
-import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
+import { SamSessionService } from "@/server/features/sam/SamSessionService";
 
 // The ensure-user middleware authorizes `projectId` against the caller's org
 // (ADR 0001); requireProjectContext exposes the verified project.
@@ -49,37 +49,24 @@ export const createSamSession = createServerFn({ method: "POST" })
     return { id: session.id };
   });
 
-const archiveSchema = z.object({ sessionId: z.string().min(1) });
-
-// Archives a SAM chat session: it disappears from the list and can no longer
-// be opened, but the registry row and the DO's transcript are kept so a future
-// unarchive can restore it. There is no unarchive UI yet.
-export const archiveSamSession = createServerFn({ method: "POST" })
+export const deleteSamSession = createServerFn({ method: "POST" })
   .middleware(requireAuthenticatedContext)
-  .validator(archiveSchema)
+  .validator(z.object({ sessionId: z.string().min(1) }))
   .handler(async ({ data, context }) => {
-    // Authorize against the session's project (the canonical project-access
-    // path), not the caller's org directly.
-    const session = await SamSessionRepository.getActiveSession(
-      data.sessionId,
-      context.userId,
-    );
-    const project = session
-      ? await ProjectRepository.getProjectForOrganization(
-          session.projectId,
-          context.organizationId,
-        )
-      : null;
-    if (!session || !project) {
-      throw new AppError("NOT_FOUND", "Chat session not found");
-    }
-    await SamSessionRepository.archiveSession(data.sessionId);
+    const deleted = await SamSessionService.deleteSession({
+      sessionId: data.sessionId,
+      userId: context.userId,
+      organizationId: context.organizationId,
+    });
     waitUntil(
       captureServerEvent({
         distinctId: context.userId,
-        event: "sam:session_archive",
+        event: "sam:session_delete",
         organizationId: context.organizationId,
-        properties: { project_id: project.id, session_id: session.id },
+        properties: {
+          project_id: deleted.projectId,
+          session_id: deleted.sessionId,
+        },
       }),
     );
     return { ok: true };

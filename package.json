@@ -76,7 +76,10 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.135",
     "@ai-sdk/react": "^3.0.211",
+    "@assistant-ui/react": "^0.15.31",
+    "@assistant-ui/react-markdown": "^0.14.24",
     "@base-ui/react": "^1.8.0",
     "@better-auth/api-key": "1.6.22",
     "@cloudflare/think": "0.17.0",

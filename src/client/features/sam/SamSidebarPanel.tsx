@@ -1,8 +1,9 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { Archive, Plus, X } from "lucide-react";
-import { archiveSamSession } from "@/serverFunctions/sam";
+import { Trash2, Plus, X } from "lucide-react";
+import { deleteSamSession } from "@/serverFunctions/sam";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
 import {
   invalidateSamSessions,
   samSessionsQueryOptions,
@@ -102,15 +103,20 @@ export function SamSidebarPanel({
   const location = useLocation();
   const activeSessionId = (location.search as { s?: string }).s;
   const optedIn = useSamBetaOptIn();
+  const [deletingSession, setDeletingSession] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const { sessionsQuery, goToSession, createSession } = useSamSessions(
     projectId,
     { onNavigate },
   );
 
-  const archiveSession = useMutation({
+  const deleteSession = useMutation({
     mutationFn: (sessionId: string) =>
-      archiveSamSession({ data: { sessionId } }),
+      deleteSamSession({ data: { sessionId } }),
     onSuccess: (_result, sessionId) => {
+      setDeletingSession(null);
       // Drop the chat from the cached list before leaving it, so the chat
       // route cannot pick it again as the most recent chat.
       queryClient.setQueryData(
@@ -179,21 +185,20 @@ export function SamSidebarPanel({
                     >
                       {session.title}
                     </button>
-                    {/* The age and the Archive button share one grid cell, so the
-                    button takes the place of the age when it shows. */}
-                    <div className="grid shrink-0 place-items-center *:col-start-1 *:row-start-1">
-                      <span className="pointer-events-none text-xs text-muted-foreground/75 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:opacity-0">
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span className="text-xs text-muted-foreground/75">
                         {ageLabel(session.updatedAt)}
                       </span>
                       <Button
                         variant="ghost"
                         size="icon-xs"
-                        aria-label="Archive chat"
-                        className="text-muted-foreground reveal-on-hover"
-                        disabled={archiveSession.isPending}
-                        onClick={() => archiveSession.mutate(session.id)}
+                        aria-label={`Delete conversation: ${session.title}`}
+                        title="Delete conversation"
+                        className="text-muted-foreground hover:text-destructive"
+                        disabled={deleteSession.isPending}
+                        onClick={() => setDeletingSession(session)}
                       >
-                        <Archive />
+                        <Trash2 />
                       </Button>
                     </div>
                   </div>
@@ -205,6 +210,19 @@ export function SamSidebarPanel({
       </div>
 
       <BetaNotice />
+      {deletingSession && (
+        <ConfirmDialog
+          title="Delete conversation?"
+          confirmLabel="Delete conversation"
+          destructive
+          pending={deleteSession.isPending}
+          onClose={() => setDeletingSession(null)}
+          onConfirm={() => deleteSession.mutate(deletingSession.id)}
+        >
+          Permanently delete “{deletingSession.title}” and its messages? This
+          cannot be undone.
+        </ConfirmDialog>
+      )}
     </div>
   );
 }

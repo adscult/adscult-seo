@@ -82,6 +82,11 @@ declare namespace Cloudflare {
     OPENROUTER_API_KEY?: string;
     // Optional OpenRouter model slug override (defaults in openrouter.ts).
     OPENROUTER_MODEL?: string;
+    SAM_PROVIDER?: "openrouter" | "anthropic";
+    SAM_TOOL_PROFILE?: "full" | "connected_data";
+    SAM_MODELS?: string;
+    ANTHROPIC_API_KEY?: string;
+    ANTHROPIC_MODEL?: string;
   }
 }
 

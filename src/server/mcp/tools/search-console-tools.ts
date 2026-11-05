@@ -1,5 +1,6 @@
 /* eslint-disable max-lines */
 import { z } from "zod";
+import { sortBy } from "remeda";
 import { buildProjectMeta } from "@/server/mcp/context";
 import { mcpResponse } from "@/server/mcp/formatters";
 import { optionalMetaOutputSchema } from "@/server/mcp/output-schemas";
@@ -158,6 +159,55 @@ function roundMetrics<T extends GscPerfRow>(row: T): T {
   };
 }
 
+function monthlyRows(rows: GscPerfRow[]) {
+  const months = new Map<
+    string,
+    {
+      clicks: number;
+      impressions: number;
+      weightedPosition: number;
+      positionImpressions: number;
+      daysWithData: number;
+    }
+  >();
+  for (const row of rows) {
+    const date = row.keys?.[0];
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date))
+      throw new Error(
+        "Expected daily Search Console rows for monthly aggregation.",
+      );
+    const month = date.slice(0, 7);
+    const total = months.get(month) ?? {
+      clicks: 0,
+      impressions: 0,
+      weightedPosition: 0,
+      positionImpressions: 0,
+      daysWithData: 0,
+    };
+    total.clicks += row.clicks;
+    total.impressions += row.impressions;
+    total.daysWithData++;
+    if (row.position !== undefined) {
+      total.weightedPosition += row.position * row.impressions;
+      total.positionImpressions += row.impressions;
+    }
+    months.set(month, total);
+  }
+  return sortBy(
+    Array.from(months, ([month, total]) => ({
+      keys: [month],
+      clicks: total.clicks,
+      impressions: total.impressions,
+      ctr: total.impressions ? total.clicks / total.impressions : 0,
+      ...(total.positionImpressions
+        ? { position: total.weightedPosition / total.positionImpressions }
+        : {}),
+      daysWithData: total.daysWithData,
+    })),
+    (row) => row.keys[0],
+  );
+}
+
 const filterSchema = z.object({
   dimension: z.enum(GSC_DIMENSIONS),
   operator: z.enum(GSC_FILTER_OPERATORS).default("equals"),
@@ -166,6 +216,12 @@ const filterSchema = z.object({
 
 const perfInputSchema = {
   projectId: projectIdSchema,
+  aggregation: z
+    .enum(["none", "month"])
+    .optional()
+    .describe(
+      "Use month for monthly comparisons: requires dimensions ['date'], returns monthly totals, CTR and daysWithData instead of daily rows. Fetches the full daily window; rowLimit/startRow and metric bounds are not used in this mode.",
+    ),
   dimensions: z
     .array(z.enum(GSC_DIMENSIONS))
     .min(1)
@@ -312,9 +368,24 @@ export const getSearchConsolePerformanceTool = {
         "Provide both startDate and endDate, or neither (use dateRange instead).",
       );
     }
+    const monthly = args.aggregation === "month";
+    if (
+      monthly &&
+      (args.dimensions?.length !== 1 ||
+        args.dimensions[0] !== "date" ||
+        (args.startRow ?? 0) !== 0 ||
+        pickMetricFilter(args))
+    ) {
+      return invalidRequest(
+        meta,
+        "Monthly aggregation requires only the date dimension, startRow 0, and no metric bounds. Dimension filters are supported.",
+      );
+    }
 
     try {
-      const requestedLimit = args.rowLimit ?? GSC_DEFAULT_ROW_LIMIT;
+      const requestedLimit = monthly
+        ? GSC_MAX_ROW_LIMIT
+        : (args.rowLimit ?? GSC_DEFAULT_ROW_LIMIT);
       const metricFilter = pickMetricFilter(args);
       // Google can't filter by position or impressions, so with a metric filter
       // we fetch the full window and filter here; fetched == returned otherwise.
@@ -334,15 +405,23 @@ export const getSearchConsolePerformanceTool = {
       const dimensions = result.request.dimensions ?? ["query"];
       const startRow = result.request.startRow ?? 0;
       const fetched = result.rows;
+      if (monthly && fetched.length >= fetchLimit) {
+        return invalidRequest(
+          meta,
+          "Monthly aggregation reached the daily source row limit. Request a shorter date range to avoid partial totals.",
+        );
+      }
       const kept = metricFilter
         ? fetched.filter((row) => matchesMetricFilter(row, metricFilter))
         : fetched;
-      const rows = kept.slice(0, requestedLimit).map(roundMetrics);
+      const rows = (
+        monthly ? monthlyRows(fetched) : kept.slice(0, requestedLimit)
+      ).map(roundMetrics);
       // Pagination stays in Google's row space: the next page starts right after
       // the last row we returned (which may be well past rows.length when a
       // metric filter dropped rows before it).
       const lastReturned = kept[rows.length - 1];
-      const truncated = kept.length > rows.length;
+      const truncated = !monthly && kept.length > rows.length;
       const hasMore = truncated || fetched.length >= fetchLimit;
       const nextStartRow =
         truncated && lastReturned
@@ -353,7 +432,7 @@ export const getSearchConsolePerformanceTool = {
         ? ` · filtered ${fetched.length} rows → ${kept.length}`
         : "";
       const header =
-        `${result.siteUrl} · ${dimensions.join("+")} · ${result.request.startDate}→${result.request.endDate} · ` +
+        `${result.siteUrl} · ${monthly ? "month" : dimensions.join("+")} · ${result.request.startDate}→${result.request.endDate} · ` +
         `${rows.length} row${rows.length === 1 ? "" : "s"}${filterText}${hasMore ? ` (more available — call again with startRow=${nextStartRow})` : ""}`;
       const text =
         rows.length > 0
@@ -368,7 +447,10 @@ export const getSearchConsolePerformanceTool = {
           siteUrl: result.siteUrl,
           startDate: result.request.startDate,
           endDate: result.request.endDate,
-          dimensions,
+          dimensions: monthly ? ["month"] : dimensions,
+          ...(monthly
+            ? { aggregation: "month", sourceRowCount: fetched.length }
+            : {}),
           rowCount: rows.length,
           rows,
           hasMore,

@@ -82,6 +82,11 @@ const projectNavItems = [
     icon: MessageSquare,
   },
   {
+    to: "/p/$projectId/sam" as const,
+    label: "SAM",
+    icon: MessageSquare,
+  },
+  {
     to: "/p/$projectId/reports" as const,
     label: "Reports",
     icon: FileText,
@@ -159,6 +164,7 @@ export function getProjectNavGroups(projectId: string) {
     {
       label: "AI Tools",
       items: [
+        byPath("/p/$projectId/sam"),
         byPath("/p/$projectId/reports"),
         byPath("/p/$projectId/context"),
         aiNavItem,

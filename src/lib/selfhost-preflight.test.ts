@@ -9,6 +9,38 @@ function itemFor(
 }
 
 describe("runSelfhostPreflight", () => {
+  it("gates SAM on the selected provider key and reports its model", () => {
+    const settings = {
+      AUTH_MODE: "local_noauth",
+      SAM_PROVIDER: "anthropic",
+      OPENROUTER_API_KEY: "router-only",
+    };
+    expect(
+      itemFor(runSelfhostPreflight(settings), "AI features"),
+    ).toMatchObject({
+      level: "info",
+    });
+    expect(
+      itemFor(
+        runSelfhostPreflight({ ...settings, ANTHROPIC_API_KEY: "claude-key" }),
+        "AI features",
+      ),
+    ).toMatchObject({
+      level: "ok",
+    });
+    expect(
+      itemFor(runSelfhostPreflight(settings), "AI features")?.message,
+    ).toContain("ANTHROPIC_API_KEY not set");
+    expect(
+      itemFor(
+        runSelfhostPreflight({ ...settings, ANTHROPIC_API_KEY: "claude-key" }),
+        "AI features",
+      )?.message,
+    ).toContain("latest-sonnet");
+    expect(
+      runSelfhostPreflight({ ...settings, SAM_PROVIDER: "typo" }).failed,
+    ).toBe(true);
+  });
   it.each([undefined, "invalid-address", "owner@example.com"])(
     "requires valid configured owners for Cloudflare Access (%s)",
     (owners) => {

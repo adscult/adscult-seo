@@ -80,6 +80,8 @@ import { explorePromptTool } from "@/server/mcp/tools/explore-prompt";
 import { discoverSiteUrls, readPages, readSite } from "@/server/lib/scrape";
 import { capToolOutput } from "@/server/features/sam/samToolOutput";
 import openSeoFactSheet from "@/server/features/sam/openseo-fact-sheet.md?raw";
+import { buildSamConnectedTools } from "./samConnectedTools";
+import { resolveSamToolRole } from "./samToolAuth";
 
 // Enough pages for SAM to work out what a business does, sells, and positions
 // against on its own.
@@ -89,7 +91,7 @@ const SAM_MAX_MAPPED_URLS = 60;
 // Shape of the MCP tool objects exported from src/server/mcp/tools/*. SAM reuses
 // the exact same definitions the MCP server registers, so the in-app agent and
 // the MCP server can never drift in what a tool does or how it bills.
-type McpToolDefinition<Shape extends ZodRawShape> = {
+export type McpToolDefinition<Shape extends ZodRawShape> = {
   name: string;
   config: { description: string; inputSchema: Shape };
   handler: (
@@ -159,11 +161,21 @@ function adaptMcpTool<Shape extends ZodRawShape>(
         ? { ...args, projectId }
         : args) as unknown as z.infer<z.ZodObject<Shape>>;
       try {
+        const role = await withPgClient(() => resolveSamToolRole(context.auth));
+        if (!role)
+          return { error: "You no longer have access to this organization." };
         // Tool calls run inside Think's inference loop, outside any ambient
         // request scope, so each execution scopes its own Postgres client
         // (no-op in D1 mode) — same rule as the DO's other DB-touching seams.
         return capToolOutput(
-          toModelOutput(await withPgClient(() => handler(fullArgs, context))),
+          toModelOutput(
+            await withPgClient(() =>
+              handler(fullArgs, {
+                ...context,
+                auth: { ...context.auth, role },
+              }),
+            ),
+          ),
         );
       } catch (error) {
         // Surface the failure to the model so it can recover or report it,
@@ -333,6 +345,7 @@ export function buildSamMcpTools(
   authContext: ToolAuthContext,
   project: { id: string; domain: string | null },
   turnId?: string,
+  profile: "full" | "connected_data" = "full",
 ): ToolSet {
   const projectId = project.id;
   const toolContext: ToolContext = { auth: authContext, turnId };
@@ -367,7 +380,7 @@ export function buildSamMcpTools(
   // Note: no `list_projects`. SAM is bound to the session's project, so
   // discovering other projects isn't part of its job — every project-scoped tool
   // below has `projectId` injected server-side by adaptMcpTool.
-  return {
+  const tools: ToolSet = {
     // On-demand product reference (kept out of the system prompt: inlining it
     // made the agent narrate hosted/self-hosted framing at signed-in users).
     get_product_info: tool({
@@ -461,4 +474,6 @@ export function buildSamMcpTools(
     get_audit_issues: adaptTool(getAuditIssuesTool),
     get_audit_pages: adaptTool(getAuditPagesTool),
   };
+  if (profile === "full") return tools;
+  return buildSamConnectedTools(tools, adaptTool);
 }

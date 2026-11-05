@@ -1,7 +1,52 @@
 import { sql } from "drizzle-orm";
-import { index, pgTable, text } from "drizzle-orm/pg-core";
-import { user } from "./better-auth-schema";
+import {
+  index,
+  pgTable,
+  text,
+  integer,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+import { user, organization } from "./better-auth-schema";
 import { projects } from "./app.schema";
+
+export const samUsageDays = pgTable(
+  "sam_usage_days",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+  },
+  (table) => [
+    uniqueIndex("sam_usage_days_org_date_uidx").on(
+      table.organizationId,
+      table.date,
+    ),
+  ],
+);
+
+export const samModelCalls = pgTable(
+  "sam_model_calls",
+  {
+    id: text("id").primaryKey(),
+    usageDayId: text("usage_day_id")
+      .notNull()
+      .references(() => samUsageDays.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").references(() => samSessions.id, {
+      onDelete: "set null",
+    }),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    purpose: text("purpose").notNull(),
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (table) => [index("sam_model_calls_day_idx").on(table.usageDayId)],
+);
 
 // See src/db/pg/app.schema.ts for why timestamps are ISO-8601 UTC text.
 const isoNow = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;

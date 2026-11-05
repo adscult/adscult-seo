@@ -92,11 +92,15 @@ async function touch(id: string) {
 }
 
 // Callers must have already authorized the session's project.
-async function archiveSession(id: string) {
+async function setArchived(id: string, archived: boolean) {
   await db
     .update(samSessions)
-    .set({ archivedAt: new Date().toISOString() })
+    .set({ archivedAt: archived ? new Date().toISOString() : null })
     .where(eq(samSessions.id, id));
+}
+
+async function deleteSession(id: string) {
+  await db.delete(samSessions).where(eq(samSessions.id, id));
 }
 
 export const SamSessionRepository = {
@@ -106,5 +110,6 @@ export const SamSessionRepository = {
   getActiveSession,
   setTitle,
   touch,
-  archiveSession,
+  setArchived,
+  deleteSession,
 } as const;
