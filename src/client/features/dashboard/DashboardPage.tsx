@@ -160,13 +160,10 @@ export function DashboardPage({
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Your website
-            </p>
-            <h1 className="text-2xl font-semibold">
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">
               {activation.domain || "Dashboard"}
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Search visibility, links and site health in one place.
             </p>
           </div>
@@ -214,7 +211,10 @@ export function DashboardPage({
           }}
           className="gap-4"
         >
-          <TabsList aria-label="Your website dashboard" className="h-9">
+          <TabsList
+            aria-label="Your website dashboard"
+            className="h-10 rounded-xl border border-border bg-muted/60 p-1"
+          >
             {(
               [
                 ["overview", "Overview"],
@@ -222,7 +222,11 @@ export function DashboardPage({
                 ["backlinks", "Backlinks"],
               ] as const
             ).map(([value, label]) => (
-              <TabsTrigger key={value} value={value} className="px-3">
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="px-4 data-active:text-primary dark:data-active:border-transparent dark:data-active:bg-background"
+              >
                 {label}
               </TabsTrigger>
             ))}

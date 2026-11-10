@@ -58,23 +58,48 @@ export function DashboardOnboarding({
   const deferred = steps.filter(
     (step) => getStepStatus(activation, step.id) === "skipped",
   );
+  const completedCount = completed.length;
+  const progress = (completedCount / steps.length) * 100;
 
   if (remaining.length === 0 && deferred.length === 0) return null;
 
   return (
     <section
       aria-label="Onboarding checklist"
-      className="overflow-hidden rounded-xl border border-border bg-card"
+      className="overflow-hidden rounded-2xl border border-border bg-card"
     >
-      <header className="border-b border-border px-5 py-5 sm:px-6">
-        <h2 className="text-lg font-semibold">Get started</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Research competitors and keywords, audit your site, and connect your
-          tools.
-        </p>
+      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border px-5 py-4 sm:px-6">
+        <div>
+          <h2 className="text-base font-semibold">Get started</h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            A few useful first steps for this project.
+          </p>
+        </div>
+        <div
+          className="flex items-center gap-3"
+          role="progressbar"
+          aria-label="Setup progress"
+          aria-valuemin={0}
+          aria-valuemax={steps.length}
+          aria-valuenow={completedCount}
+        >
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
+            {completedCount} of {steps.length} complete
+          </span>
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-20 overflow-hidden rounded-full bg-muted"
+          >
+            <span
+              className="block h-full rounded-full bg-primary transition-[width] duration-200"
+              style={{ width: `${progress}%` }}
+            />
+          </span>
+        </div>
       </header>
       <Accordion
         value={selected ? [selected] : []}
+        className="grid gap-x-6 px-4 sm:grid-cols-2 sm:px-6"
         onValueChange={(value) => {
           const next = remaining.find((step) => step.id === value[0])?.id;
           setSelected(next ?? null);
@@ -85,19 +110,21 @@ export function DashboardOnboarding({
         {remaining.map((item) => {
           const Icon = item.icon;
           return (
-            <AccordionItem key={item.id} value={item.id}>
-              <AccordionTrigger className="items-center gap-3 rounded-none border-0 px-5 py-4 hover:bg-foreground/5 hover:no-underline focus-visible:ring-inset aria-expanded:bg-primary/5 sm:px-6">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/5">
-                  <Icon className="size-4" />
+            <AccordionItem
+              key={item.id}
+              value={item.id}
+              className="border-0 not-last:border-b-0 data-[open]:sm:col-span-2"
+            >
+              <AccordionTrigger className="items-center gap-3 rounded-none border-0 border-b border-border px-1 py-3 hover:bg-transparent hover:no-underline focus-visible:ring-inset aria-expanded:text-primary">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block">{item.label}</span>
-                  <span className="mt-1 hidden text-xs font-normal text-muted-foreground sm:block">
-                    {item.detail}
-                  </span>
+                  <span className="block leading-snug">{item.label}</span>
                 </span>
               </AccordionTrigger>
-              <AccordionContent className="space-y-5 px-5 py-5 sm:px-6">
+              <AccordionContent className="space-y-4 px-1 py-4 sm:col-span-2 sm:px-2">
+                <p className="text-sm text-muted-foreground">{item.detail}</p>
                 <DashboardSetupAction
                   step={item.id}
                   projectId={projectId}
@@ -125,7 +152,7 @@ export function DashboardOnboarding({
       </Accordion>
       {deferred.length > 0 && (
         <Collapsible className="border-t border-border">
-          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-4 text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset sm:px-6">
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-3 text-left text-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset sm:px-6">
             <ChevronRight className="size-4 transition-transform group-data-panel-open:rotate-90" />
             {deferred.length} saved for later
           </CollapsibleTrigger>
@@ -155,7 +182,7 @@ export function DashboardOnboarding({
       )}
       {completed.length > 0 && (
         <Collapsible className="border-t border-border">
-          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-4 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset sm:px-6">
+          <CollapsibleTrigger className="group flex w-full items-center gap-2 px-5 py-3 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset sm:px-6">
             <Check className="size-4 text-success" />
             {completed.length} completed
             <ChevronRight className="ml-auto size-4 text-muted-foreground transition-transform group-data-panel-open:rotate-90" />

@@ -32,14 +32,14 @@ function BetaNotice() {
   if (dismissed) return null;
 
   return (
-    <div className="mx-2 mb-2 rounded-lg border border-border bg-card p-3">
+    <div className="mx-2 mb-2 rounded-lg border border-sidebar-border bg-sidebar-card p-3">
       <div className="flex items-center justify-between">
         <Badge>Beta</Badge>
         <Button
           variant="ghost"
           size="icon-xs"
           aria-label="Dismiss"
-          className="text-muted-foreground"
+          className="text-sidebar-foreground/70"
           onClick={() => {
             localStorage.setItem(BETA_NOTICE_DISMISSED_KEY, "1");
             setDismissed(true);
@@ -48,9 +48,8 @@ function BetaNotice() {
           <X />
         </Button>
       </div>
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        For more powerful AI workflows, use the OpenSEO MCP with your own agent
-        like Claude Code or Hermes.
+      <p className="mt-1.5 text-xs text-sidebar-foreground/70">
+        For deeper AI workflows, connect your own agent with MCP.
       </p>
       <Link
         to="/ai"
@@ -132,7 +131,7 @@ export function SamSidebarPanel({
   // chat list that can be used yet.
   if (!optedIn) {
     return (
-      <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+      <p className="px-4 py-6 text-center text-xs text-sidebar-foreground/70">
         Your chats will show here once you opt in to the beta.
       </p>
     );
@@ -146,7 +145,7 @@ export function SamSidebarPanel({
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 font-normal text-muted-foreground"
+          className="w-full justify-start gap-2 font-normal text-sidebar-foreground/70"
           pending={createSession.isPending}
           onClick={() => createSession.mutate()}
         >
@@ -163,7 +162,7 @@ export function SamSidebarPanel({
         >
           {(loadedSessions) =>
             loadedSessions.length === 0 ? (
-              <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+              <p className="px-2 py-6 text-center text-xs text-sidebar-foreground/70">
                 No chats yet. Start a new one.
               </p>
             ) : (
@@ -186,7 +185,7 @@ export function SamSidebarPanel({
                       {session.title}
                     </button>
                     <div className="flex shrink-0 items-center gap-1">
-                      <span className="text-xs text-muted-foreground/75">
+                      <span className="text-xs text-sidebar-foreground/55">
                         {ageLabel(session.updatedAt)}
                       </span>
                       <Button
@@ -194,7 +193,7 @@ export function SamSidebarPanel({
                         size="icon-xs"
                         aria-label={`Delete conversation: ${session.title}`}
                         title="Delete conversation"
-                        className="text-muted-foreground hover:text-destructive"
+                        className="text-sidebar-foreground/70 hover:text-destructive"
                         disabled={deleteSession.isPending}
                         onClick={() => setDeletingSession(session)}
                       >

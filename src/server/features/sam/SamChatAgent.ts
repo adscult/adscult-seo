@@ -312,10 +312,21 @@ export class SamChatAgent extends Think {
   }
 
   async configureSession(session: Session): Promise<Session> {
-    this.selectedModel = await SamModelPreferenceService.get(
-      this.ctx.storage,
-      await this.availableModels(),
-    );
+    try {
+      this.selectedModel = await SamModelPreferenceService.get(
+        this.ctx.storage,
+        await this.availableModels(),
+      );
+    } catch {
+      // Session setup should still reach the model endpoint's handled error
+      // response when the provider catalog is unavailable (for example, a
+      // rejected API key). Fall back to the deployment default for this
+      // session; actual generation still reports provider failures normally.
+      this.selectedModel = await SamModelPreferenceService.get(
+        this.ctx.storage,
+        this.samConfig,
+      );
+    }
     const compact = createCompactFunction({
       summarize: (prompt) => this.summarizeForCompaction(prompt),
     });

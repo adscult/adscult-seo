@@ -30,7 +30,7 @@ export function CardShell({
       <CardHeader className="border-b">
         <CardTitle className="flex min-w-0 items-center gap-2.5">
           {icon ? (
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-card shadow-sm">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary text-primary">
               {icon}
             </span>
           ) : null}

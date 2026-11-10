@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-08T16:05:20.060Z",
+        "reason": "The user requested the linked AdsCult page as the UI reference; its stylesheet specifies Geist as the sans font."
+      }
+    ]
+  }
+}

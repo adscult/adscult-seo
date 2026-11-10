@@ -27,7 +27,7 @@ function SupportPage() {
           </p>
           <PageHeader
             title="We want to hear from you"
-            description="We want to talk to you! We're super open to feedback and want to learn how you work so we can make OpenSEO better."
+            description="We want to talk to you. Share feedback and tell us how you work so we can make AdsCult SEO better."
           />
         </div>
 

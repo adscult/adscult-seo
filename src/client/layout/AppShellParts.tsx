@@ -3,6 +3,7 @@ import { AlertTriangle } from "lucide-react";
 import { AppBanner } from "@/client/layout/AppBanner";
 import { SidebarTrigger } from "@/client/components/ui/sidebar";
 import type { getSeoApiKeyStatus } from "@/serverFunctions/config";
+import { BrandLockup } from "@/client/components/BrandLogo";
 
 export function AppTopBar({
   providerStatus,
@@ -21,21 +22,31 @@ export function AppTopBar({
         : "Not configured";
 
   return (
-    <header className="flex min-h-11 shrink-0 items-center gap-1 border-b border-border bg-background px-2 md:px-4">
+    <header className="flex min-h-12 w-full min-w-0 shrink-0 items-center gap-1 border-b border-border/80 bg-background px-2 md:px-4">
       <div className="flex items-center gap-1 md:hidden">
         <SidebarTrigger aria-label="Toggle sidebar" />
-        <Link to="/" className="ml-1 font-semibold text-foreground">
-          OpenSEO
+        <Link
+          to="/"
+          aria-label="AdsCult SEO home"
+          className="ml-1 flex items-center gap-1.5"
+        >
+          <BrandLockup logoClassName="h-5 max-w-24" className="gap-1.5" />
         </Link>
       </div>
       <Link
         to="/settings"
-        className="ml-auto flex min-h-9 items-center gap-2 rounded-md px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="ml-auto flex min-h-9 min-w-0 max-w-full shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
         aria-label={`Active SEO provider: ${provider}. Open provider settings.`}
         title="The active provider is used for new SEO requests. Open settings to review or change it."
       >
-        <span className="text-muted-foreground">Active provider:</span>
-        <span className="font-medium" aria-live="polite">
+        <span
+          aria-hidden="true"
+          className={`size-2 shrink-0 rounded-full ${statusError || !providerStatus?.configured ? "bg-warning" : "bg-success"}`}
+        />
+        <span className="hidden text-muted-foreground md:inline">
+          SEO provider
+        </span>
+        <span className="max-w-32 truncate font-medium" aria-live="polite">
           {provider}
         </span>
       </Link>

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Check, Database, KeyRound, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/auth-client";
+import { BrandLockup } from "@/client/components/BrandLogo";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { Alert, AlertDescription } from "@/client/components/ui/alert";
 import { Button } from "@/client/components/ui/button";
@@ -19,7 +20,7 @@ export const Route = createFileRoute("/_authenticated/oauth-consent")({
 const SCOPES = [
   {
     icon: Database,
-    label: "Read your OpenSEO data",
+    label: "Read your AdsCult SEO data",
     description: "Projects, keyword reports, and audit results.",
   },
   {
@@ -72,7 +73,7 @@ function OAuthConsentPage() {
         setError("Authorization response did not include a redirect URL.");
       }
     } catch {
-      setError("We couldn't reach OpenSEO. Please try again.");
+      setError("We couldn't reach AdsCult SEO. Please try again.");
     }
     setPendingAction(null);
   }
@@ -80,16 +81,12 @@ function OAuthConsentPage() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="flex flex-col items-center text-center">
-        <img
-          src="/transparent-logo.png"
-          alt="OpenSEO"
-          className="size-10 rounded-lg"
-        />
+        <BrandLockup className="h-10" logoClassName="h-10 w-40" />
         <CardTitle className="mt-5 text-xl">
           <h1>Authorize MCP access</h1>
         </CardTitle>
         <p className="mt-2 text-sm text-muted-foreground">
-          An MCP client is requesting access to your OpenSEO workspace.
+          An MCP client is requesting access to your AdsCult SEO workspace.
         </p>
       </CardHeader>
       <CardContent>

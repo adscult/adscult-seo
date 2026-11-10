@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "cn";
 import { Spinner } from "@/client/components/Spinner";
+import { BrandLockup } from "@/client/components/BrandLogo";
 
 const WIDTHS = {
   sm: "max-w-xs",
@@ -22,7 +23,7 @@ export function StatusScreen({
   footer,
   size = "md",
 }: {
-  /** Show the OpenSEO logo, for screens outside the app shell. */
+  /** Show the AdsCult logo, for screens outside the app shell. */
   logo?: boolean;
   title?: ReactNode;
   description?: ReactNode;
@@ -45,11 +46,7 @@ export function StatusScreen({
         )}
       >
         {logo ? (
-          <img
-            src="/transparent-logo.png"
-            alt="OpenSEO"
-            className="size-10 rounded-lg"
-          />
+          <BrandLockup className="h-10" logoClassName="h-10 w-40" />
         ) : null}
         {title ? (
           <h1 className="text-center text-xl font-semibold">{title}</h1>

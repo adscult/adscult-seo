@@ -5,6 +5,7 @@ import {
   getOAuthSignedQuery,
 } from "@/lib/auth-redirect";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { BrandLockup } from "@/client/components/BrandLogo";
 
 export const authRedirectSearchSchema = z.object({
   redirect: z.string().optional(),
@@ -110,11 +111,7 @@ export function AuthPageCard({
   return (
     <div className="w-full max-w-xs space-y-6">
       <div className="space-y-3 text-center">
-        <img
-          src="/transparent-logo.png"
-          alt="OpenSEO"
-          className="mx-auto size-10 rounded-lg"
-        />
+        <BrandLockup className="mx-auto h-10" logoClassName="h-10 w-40" />
         <div>
           <h1 className="text-xl font-semibold">{title}</h1>
           {helperText ? (

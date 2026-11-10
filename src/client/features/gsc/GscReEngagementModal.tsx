@@ -116,8 +116,9 @@ export function GscReEngagementModal({
             New: Connect Google Search Console
           </DialogTitle>
           <DialogDescription>
-            Bring your real clicks, impressions, and rankings into OpenSEO and
-            query them from Claude or Codex over MCP. It never uses credits.
+            Bring your real clicks, impressions, and rankings into AdsCult SEO,
+            then query them from Claude or Codex over MCP. It never uses
+            credits.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

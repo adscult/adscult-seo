@@ -3,6 +3,7 @@ import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowRight, Tag } from "lucide-react";
 import { QueryError } from "@/client/components/QueryState";
+import { BrandLockup } from "@/client/components/BrandLogo";
 import { StatusScreen } from "@/client/components/StatusScreen";
 import { Button } from "@/client/components/ui/button";
 import { Skeleton } from "@/client/components/ui/skeleton";
@@ -101,12 +102,8 @@ function YcPlanPage() {
       <PlanPageAccountMenu email={session?.user?.email} />
 
       <div className="text-center space-y-3">
-        <img
-          src="/transparent-logo.png"
-          alt="OpenSEO"
-          className="mx-auto size-10 rounded-lg"
-        />
-        <h1 className="text-xl font-semibold">OpenSEO for YC founders</h1>
+        <BrandLockup className="mx-auto h-10" logoClassName="h-10 w-40" />
+        <h1 className="text-xl font-semibold">AdsCult SEO for YC founders</h1>
         <p className="text-sm text-muted-foreground">
           A bigger monthly credit pool for teams doing serious SEO work, with
           your first month free through the YC deal.

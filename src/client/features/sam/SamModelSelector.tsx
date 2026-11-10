@@ -44,7 +44,14 @@ export function useSamModelPreference(sessionId: string) {
     }
     return preferenceSchema.parse(await response.json());
   };
-  const query = useQuery({ queryKey, queryFn: () => request(), staleTime: 0 });
+  const query = useQuery({
+    queryKey,
+    queryFn: () => request(),
+    staleTime: 0,
+    // A manual Retry button is shown on failure. Provider auth/configuration
+    // errors will not improve after three identical automatic requests.
+    retry: false,
+  });
   const mutation = useMutation({
     mutationFn: (model: string) => request(model),
     onMutate: () => queryClient.cancelQueries({ queryKey }),

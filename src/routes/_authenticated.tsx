@@ -25,7 +25,7 @@ function AuthenticatedShellLayout() {
             variant="secondary"
             className="w-full"
           >
-            Back to OpenSEO
+            Back to AdsCult SEO
           </Button>
         </AuthPageCard>
       </AuthPageShell>

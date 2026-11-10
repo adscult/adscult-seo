@@ -37,7 +37,7 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       {
-        title: "OpenSEO",
+        title: "AdsCult SEO",
       },
       {
         charSet: "utf-8",
@@ -45,6 +45,10 @@ export const Route = createRootRoute({
       {
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
+      },
+      {
+        name: "theme-color",
+        content: "#0b0b0c",
       },
       // Disable browser auto-translate (Google Translate) app-wide. It rewrites
       // text nodes into <font> wrappers, which React then can't remove/insert,
@@ -67,23 +71,22 @@ export const Route = createRootRoute({
     links: [
       { rel: "stylesheet", href: appCss },
       {
+        rel: "preload",
+        as: "font",
+        type: "font/woff2",
+        href: "/fonts/Geist.woff2",
+        crossOrigin: "anonymous",
+      },
+      {
         rel: "apple-touch-icon",
         sizes: "180x180",
-        href: "/apple-touch-icon.png",
+        href: "/adscult-app-icon.svg",
       },
       {
         rel: "icon",
-        type: "image/png",
-        sizes: "32x32",
-        href: "/favicon-32x32.png",
+        type: "image/svg+xml",
+        href: "/adscult-app-icon.svg",
       },
-      {
-        rel: "icon",
-        type: "image/png",
-        sizes: "16x16",
-        href: "/favicon-16x16.png",
-      },
-      { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
       { rel: "manifest", href: "/site.webmanifest" },
     ],
     scripts: [],

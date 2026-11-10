@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { QueryError } from "@/client/components/QueryState";
+import { BrandLockup } from "@/client/components/BrandLogo";
 import { StatusScreen } from "@/client/components/StatusScreen";
 import {
   billingAccountQueryOptions,
@@ -200,17 +201,13 @@ function SubscribePage() {
       <PlanPageAccountMenu email={session?.user?.email} />
 
       <div className="space-y-3 text-center">
-        <img
-          src="/transparent-logo.png"
-          alt="OpenSEO"
-          className="mx-auto size-10 rounded-lg"
-        />
+        <BrandLockup className="mx-auto h-10" logoClassName="h-10 w-40" />
         <h1 className="text-xl font-semibold">
           {isUpgradeFlow
             ? "Upgrade your plan"
             : firstName
-              ? `Welcome to OpenSEO, ${firstName}!`
-              : "Welcome to OpenSEO!"}
+              ? `Welcome to AdsCult SEO, ${firstName}!`
+              : "Welcome to AdsCult SEO!"}
         </h1>
         <p className="text-sm text-muted-foreground">
           SEO on your terms. All your SEO tools in one place at a fair price.

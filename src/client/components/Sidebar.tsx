@@ -13,6 +13,7 @@ import {
   User,
 } from "lucide-react";
 import { organizationContextQueryOptions } from "@/client/features/team/organizationQueries";
+import { BrandLockup } from "@/client/components/BrandLogo";
 import { switchOrganization } from "@/serverFunctions/organization";
 import { clearLastProjectId } from "@/client/lib/active-project";
 import {
@@ -142,9 +143,14 @@ export function Sidebar({
         <Link
           to="/"
           onClick={() => setOpenMobile(false)}
-          className="px-1 pb-2 text-base font-semibold text-sidebar-foreground"
+          aria-label="AdsCult SEO home"
+          className="flex items-center gap-2 px-1 pb-3 pt-1 text-sidebar-foreground"
         >
-          OpenSEO
+          <BrandLockup
+            appearance="dark"
+            logoClassName="h-6 max-w-32"
+            className="px-0"
+          />
         </Link>
         <ProjectSwitcher
           activeProjectId={projectId}
@@ -172,7 +178,7 @@ export function Sidebar({
           >
             {navGroups.map((group) => (
               <SidebarGroup key={group.label} className="py-1">
-                <SidebarGroupLabel className="h-7 uppercase tracking-wider text-sidebar-foreground/40">
+                <SidebarGroupLabel className="h-7 uppercase tracking-wider text-sidebar-foreground/55">
                   {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>

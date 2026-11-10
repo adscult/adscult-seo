@@ -73,7 +73,8 @@ export function SecretHelpPage({
             <ol className="list-decimal space-y-2 pl-5">
               <li>
                 In Cloudflare, go to <code>Compute</code> -&gt;{" "}
-                <code>Workers &amp; Pages</code> and open your OpenSEO Worker.
+                <code>Workers &amp; Pages</code> and open your AdsCult SEO
+                Worker.
               </li>
               <li>
                 Open <code>Settings</code>.

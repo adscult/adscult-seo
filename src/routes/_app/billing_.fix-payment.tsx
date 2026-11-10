@@ -19,7 +19,7 @@ import { SkeletonPage } from "@/client/components/SkeletonPresets";
 import { Spinner } from "@/client/components/Spinner";
 import { Button } from "@/client/components/ui/button";
 
-const SUPPORT_EMAIL = "support@openseo.so";
+const SUPPORT_EMAIL = "hello@adscult.com";
 
 // How long the post-portal "checking" screen polls Autumn before telling the
 // user the retry is still pending, and how often it polls.

@@ -77,8 +77,8 @@ export function GoogleAccountRemovalDialog({
         <DialogHeader>
           <DialogTitle>Remove Google account?</DialogTitle>
           <DialogDescription>
-            This removes the account’s {name} connection from OpenSEO. You can
-            reconnect it anytime.
+            This removes the account’s {name} connection from AdsCult SEO. You
+            can reconnect it anytime.
           </DialogDescription>
         </DialogHeader>
         <p className="break-all text-sm font-medium">{label}</p>

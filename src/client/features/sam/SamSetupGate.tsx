@@ -30,8 +30,8 @@ export function SamSetupGate({
         <>
           <p>
             SAM needs a {name} API key. Create a key on {name}, set it as the{" "}
-            <code>{keyName}</code> environment variable, restart OpenSEO, then
-            confirm here.
+            <code>{keyName}</code> environment variable, restart AdsCult SEO,
+            then confirm here.
           </p>
           <p className="text-xs">
             The selected provider is {name}. Set SAM_PROVIDER to change it.
