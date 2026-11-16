@@ -36,9 +36,11 @@ export function clampSerpDepth(depth: number): number {
  * Stop crawling SERP pages once the target domain is found — DataForSEO only
  * bills the pages crawled, so a page-1 ranking at depth 20 costs one page
  * instead of two. Matching is restricted to organic results and uses
- * with_subdomains, mirroring buildRankCheckResult exactly: without
+ * with_subdomains: without
  * find_targets_in, a sitelink or PAA mention could stop the crawl before the
  * domain's organic listing and record a false "not ranking".
+ * Google redirect URLs can prevent this upstream optimization from matching;
+ * our breadcrumb fallback can recover the rank, but cannot reduce that crawl.
  */
 function stopCrawlOnTarget(targetDomain: string) {
   return {
@@ -133,16 +135,31 @@ import type {
   PostedRankCheckTask,
 } from "@/server/providers/contracts/rank-check";
 
+function serpHost(value: string | null | undefined): string {
+  return (value ?? "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .split(/[\s›/?#]/, 1)[0]
+    .toLowerCase()
+    .replace(/^www\./, "");
+}
+
 function buildRankCheckResult(
   input: { keywordId: string; keyword: string; targetDomain: string },
   items: SerpLiveItem[],
 ): RankCheckResult {
-  const target = input.targetDomain.toLowerCase();
+  const target = serpHost(input.targetDomain);
   const organicMatch = items.find((item) => {
-    if (item.type !== "organic" || item.domain == null) return false;
-    const domain = item.domain.toLowerCase();
-    return domain === target || domain.endsWith(`.${target}`);
+    if (item.type !== "organic" || !target) return false;
+    return [item.domain, item.url, item.breadcrumb].some((value) => {
+      const host = serpHost(value);
+      return host === target || host.endsWith(`.${target}`);
+    });
   });
+  const urlHost = serpHost(organicMatch?.url);
+  const breadcrumbHost = serpHost(organicMatch?.breadcrumb);
+  const wrappedUrl =
+    /(^|\.)google\.(com|[a-z]{2}|co\.[a-z]{2}|com\.[a-z]{2})$/.test(urlHost);
 
   return {
     keywordId: input.keywordId,
@@ -153,7 +170,10 @@ function buildRankCheckResult(
     position: organicMatch
       ? (organicMatch.rank_group ?? organicMatch.rank_absolute ?? null)
       : null,
-    url: organicMatch?.url ?? null,
+    url:
+      wrappedUrl && breadcrumbHost && breadcrumbHost !== urlHost
+        ? (organicMatch?.breadcrumb ?? null)
+        : (organicMatch?.url ?? null),
     serpFeatures: [...new Set(items.map((item) => item.type).filter(Boolean))],
   };
 }

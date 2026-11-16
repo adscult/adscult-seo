@@ -117,6 +117,15 @@ export function DeviceUrlCell({
   if (!result.rankingUrl) {
     return <span className="text-xs text-muted-foreground">-</span>;
   }
+  // Google may return only an abbreviated breadcrumb behind a redirect.
+  // It is display text, not a navigable ranking-page URL.
+  if (/[\s›]/.test(result.rankingUrl)) {
+    return (
+      <span className="block truncate text-xs" title={result.rankingUrl}>
+        {result.rankingUrl}
+      </span>
+    );
+  }
   return (
     <a
       href={toFullUrl(result.rankingUrl, domain)}

@@ -9,6 +9,7 @@ import {
   fetchLiveSerp,
   fetchLocalSerpTaskResult,
   fetchRankCheckTaskResult,
+  fetchRankCheckSerp,
   postLocalSerpTasks,
   postRankCheckTasks,
 } from "@/server/lib/dataforseo/serp";
@@ -59,6 +60,80 @@ describe("live SERP", () => {
 });
 
 describe("rank check task queue", () => {
+  it.each(["live", "queued"])(
+    "matches wrapped organic breadcrumb hosts in %s results",
+    async (mode) => {
+      const breadcrumb =
+        "https://WWW.TurakhiaEyewear.com › collections › prada-sun...";
+      vi.stubGlobal(
+        "fetch",
+        vi.fn<typeof fetch>().mockResolvedValue(
+          Response.json({
+            status_code: 20000,
+            tasks: [
+              {
+                status_code: 20000,
+                cost: 0.008,
+                path: ["v3", "serp", "google", "organic", "live", "advanced"],
+                result: [
+                  {
+                    items: [
+                      {
+                        type: "paid",
+                        domain: "turakhiaeyewear.com",
+                        rank_group: 1,
+                      },
+                      {
+                        type: "organic",
+                        domain: "google.com",
+                        url: "https://google.com/goto?url=wrapped",
+                        breadcrumb:
+                          "https://turakhiaeyewear.com.evil.test › prada",
+                        rank_group: 2,
+                      },
+                      {
+                        type: "organic",
+                        domain: "google.com",
+                        url: "https://google.com/goto?url=wrapped",
+                        breadcrumb,
+                        rank_group: 17,
+                        rank_absolute: 24,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          }),
+        ),
+      );
+      const input = {
+        keywordId: "kw-1",
+        keyword: "prada sunglasses",
+        targetDomain: "turakhiaeyewear.com",
+      };
+      const result =
+        mode === "live"
+          ? (
+              await fetchRankCheckSerp({
+                ...input,
+                locationCode: 2356,
+                languageCode: "en",
+                device: "desktop",
+                depth: 50,
+              })
+            ).data
+          : await fetchRankCheckTaskResult({ ...input, taskId: "task-a" });
+      expect(
+        mode === "live"
+          ? result
+          : result && "result" in result
+            ? result.result
+            : null,
+      ).toMatchObject({ position: 17, url: breadcrumb });
+    },
+  );
+
   it("posts queued tasks, maps ids by tag, and sums cost over all entries", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       Response.json({
